@@ -1,5 +1,6 @@
 #include "funk.h"
 #include <stdio.h>
+#include <string.h>
 
 void funk_init_scanner(FunkScanner* scanner, const char* code) {
 	scanner->start = code;
@@ -115,6 +116,80 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 
 		default: return make_token(scanner, FUNK_TOKEN_EOF);
 	}
+}
+
+void funk_free_object(sFunkVm* vm, FunkObject* object) {
+	switch (object->type) {
+		case FUNK_OBJECT_BASIC_FUNCTION: {
+			FunkBasicFunction* function = (FunkBasicFunction*) object;
+			vm->freeFn((void*) function->code);
+
+			break;
+		}
+
+		case FUNK_OBJECT_STRING: {
+			FunkString* string = (FunkString*) object;
+			vm->freeFn((void*) string->chars);
+
+			break;
+		}
+
+		case FUNK_OBJECT_NATIVE_FUNCTION: {
+			break;
+		}
+
+		default: {
+			UNREACHABLE
+		}
+	}
+
+	vm->freeFn((void*) object);
+}
+
+FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) {
+	FunkString* string = (FunkString*) vm->allocFn(sizeof(FunkString));
+
+	string->chars = (const char*) vm->allocFn(length);
+	string->length = length;
+
+	memcpy((void*) string->chars, chars, length);
+
+	return string;
+}
+
+FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
+	FunkBasicFunction* function = (FunkBasicFunction*) vm->allocFn(sizeof(FunkBasicFunction));
+
+	function->parent.name = name;
+	function->code = NULL;
+	function->code_length = 0;
+	function->code_allocated = 0;
+
+	return function;
+}
+
+void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, FunkInstruction instruction) {
+	if (function->code_allocated < function->code_length + 1) {
+		uint16_t new_size = FUNK_GROW_CAPACITY(function->code_allocated);
+		uint8_t* new_chunk = (uint8_t*) vm->allocFn(sizeof(uint8_t) * new_size);
+
+		memcpy((void*) new_chunk, (void*) function->code, function->code_allocated);
+		vm->freeFn((void*) function->code);
+
+		function->code = new_chunk;
+		function->code_allocated = new_size;
+	}
+
+	function->code[function->code_length++] = (uint8_t) instruction;
+}
+
+FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, Funk_NativeFn fn) {
+	FunkNativeFunction* function = (FunkNativeFunction*) vm->allocFn(sizeof(FunkNativeFunction));
+
+	function->parent.name = name;
+	function->fn = fn;
+
+	return function;
 }
 
 FunkVm* funk_create_vm(Funk_AllocFn allocFn, Funk_FreeFn freeFn, Funk_ErrorFn errorFn) {
