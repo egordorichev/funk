@@ -46,6 +46,7 @@ typedef enum {
 
 typedef struct FunkObject {
 	FunkObjectType type;
+	struct FunkObject* next;
 } FunkObject;
 
 void funk_free_object(sFunkVm* vm, FunkObject* object);
@@ -55,6 +56,7 @@ typedef struct FunkString {
 
 	const char* chars;
 	uint16_t length;
+	uint32_t hash;
 } FunkString;
 
 FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length);
@@ -68,10 +70,10 @@ const char* funk_to_string(sFunkVm* vm, FunkFunction* function);
 
 typedef enum {
 	FUNK_INSTRUCTION_RETURN,
-	FUNK_INSTRUCTION_PUSH,
-	FUNK_INSTRUCTION_POP,
 	FUNK_INSTRUCTION_CALL,
-	FUNK_INSTRUCTION_GET
+	FUNK_INSTRUCTION_GET,
+	FUNK_INSTRUCTION_GET_STRING,
+	FUNK_INSTRUCTION_POP
 } FunkInstruction;
 
 typedef struct FunkBasicFunction {
@@ -90,14 +92,14 @@ FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name);
 void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction);
 uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject* constant);
 
-typedef FunkFunction* (*Funk_NativeFn)(sFunkVm*, FunkFunction* args, uint8_t arg_count);
+typedef FunkFunction* (*FunkNativeFn)(sFunkVm*, FunkFunction**, uint8_t);
 
 typedef struct FunkNativeFunction {
 	FunkFunction parent;
-	Funk_NativeFn fn;
+	FunkNativeFn fn;
 } FunkNativeFunction;
 
-FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, Funk_NativeFn fn);
+FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, FunkNativeFn fn);
 
 typedef struct FunkCompiler {
 	FunkScanner* scanner;
@@ -110,21 +112,53 @@ typedef struct FunkCompiler {
 
 FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* string);
 
-typedef void* (*Funk_AllocFn)(size_t);
-typedef void (*Funk_FreeFn)(void*);
-typedef void (*Funk_ErrorFn)(sFunkVm*, const char*);
+#define TABLE_MAX_LOAD 0.75
+
+typedef struct {
+	FunkString* key;
+	FunkObject* value;
+} FunkTableEntry;
+
+typedef struct FunkTable {
+	int count;
+	int capacity;
+
+	FunkTableEntry* entries;
+} FunkTable;
+
+void funk_init_table(FunkTable* table);
+void funk_free_table(sFunkVm* vm, FunkTable* table);
+bool funk_table_set(sFunkVm* vm, FunkTable* table, FunkString* key, FunkObject* value);
+bool funk_table_get(FunkTable* table, FunkString* key, FunkObject** value);
+FunkString* funk_table_find_string(FunkTable* table, const char* chars, uint16_t length, uint32_t hash);
+
+typedef void* (*FunkAllocFn)(size_t);
+typedef void (*FunkFreeFn)(void*);
+typedef void (*FunkErrorFn)(sFunkVm*, const char*);
+
+#define FUNK_STACK_SIZE 256
 
 typedef struct sFunkVm {
-	Funk_AllocFn allocFn;
-	Funk_FreeFn freeFn;
-	Funk_ErrorFn errorFn;
+	FunkAllocFn allocFn;
+	FunkFreeFn freeFn;
+	FunkErrorFn errorFn;
+
+	FunkTable globals;
+	FunkTable strings;
+	FunkObject* objects;
+
+	FunkFunction* stack[FUNK_STACK_SIZE];
+	FunkFunction** stackTop;
 } FunkVm;
 
-FunkVm* funk_create_vm(Funk_AllocFn allocFn, Funk_FreeFn freeFn, Funk_ErrorFn errorFn);
+FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn);
 void funk_free_vm(FunkVm* vm);
-bool funk_run_function(FunkVm* vm, FunkFunction* function);
-bool funk_run_string(FunkVm* vm, const char* name, const char* string);
+FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function);
+FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 
-#define FUNK_DEFINE_NATIVE_FUNCTION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t arg_count)
+#define FUNK_NATIVE_FUNCTION_DEFINITION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t arg_count)
+#define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, name)
+
+void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
 
 #endif

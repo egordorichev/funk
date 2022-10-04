@@ -1,7 +1,7 @@
 #include "funk_std.h"
 #include <stdio.h>
 
-FUNK_DEFINE_NATIVE_FUNCTION(print) {
+FUNK_NATIVE_FUNCTION_DEFINITION(print) {
 	for (uint8_t i = 0; i < arg_count; i++) {
 		// todo: instead of this, it should just call the function
 		printf("%s\n", funk_to_string(vm, args[i]));
@@ -11,5 +11,5 @@ FUNK_DEFINE_NATIVE_FUNCTION(print) {
 }
 
 void funk_open_std(FunkVm* vm) {
-
+	FUNK_DEFINE_FUNCTION("print", print);
 }

@@ -1,6 +1,6 @@
 #include "funk.h"
-#include <stdio.h>
 #include <string.h>
+#include <printf.h>
 
 void funk_init_scanner(FunkScanner* scanner, const char* code) {
 	scanner->start = code;
@@ -122,7 +122,14 @@ void funk_free_object(sFunkVm* vm, FunkObject* object) {
 	switch (object->type) {
 		case FUNK_OBJECT_BASIC_FUNCTION: {
 			FunkBasicFunction* function = (FunkBasicFunction*) object;
-			vm->freeFn((void*) function->code);
+
+			if (function->code != NULL) {
+				vm->freeFn((void *) function->code);
+			}
+
+			if (function->constants != NULL) {
+				vm->freeFn((void *) function->constants);
+			}
 
 			break;
 		}
@@ -146,13 +153,44 @@ void funk_free_object(sFunkVm* vm, FunkObject* object) {
 	vm->freeFn((void*) object);
 }
 
-FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) {
-	FunkString* string = (FunkString*) vm->allocFn(sizeof(FunkString));
+static FunkObject* allocate_object(FunkVm* vm, size_t size) {
+	FunkObject* object = (FunkObject*) vm->allocFn(size);
 
+	object->next = vm->objects;
+	vm->objects = object;
+
+	return object;
+}
+
+static uint32_t hash_string(const char* key, int length) {
+	uint32_t hash = 2166136261u;
+
+	for (int i = 0; i < length; i++) {
+		hash ^= (uint8_t) key[i];
+		hash *= 16777619;
+	}
+
+	return hash;
+}
+
+FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) {
+	uint32_t hash = hash_string(chars, length);
+	FunkString* interned = funk_table_find_string(&vm->strings, chars, length, hash);
+
+	if (interned != NULL) {
+		return interned;
+	}
+
+	FunkString* string = (FunkString*) allocate_object(vm, sizeof(FunkString));
+
+	string->object.type = FUNK_OBJECT_STRING;
 	string->chars = (const char*) vm->allocFn(length);
 	string->length = length;
+	string->hash = hash;
 
 	memcpy((void*) string->chars, chars, length);
+
+	funk_table_set(vm, &vm->strings, string, (FunkObject*) string);
 
 	return string;
 }
@@ -162,9 +200,11 @@ const char* funk_to_string(sFunkVm* vm, FunkFunction* function) {
 }
 
 FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
-	FunkBasicFunction* function = (FunkBasicFunction*) vm->allocFn(sizeof(FunkBasicFunction));
+	FunkBasicFunction* function = (FunkBasicFunction*) allocate_object(vm, sizeof(FunkBasicFunction));
 
+	function->parent.object.type = FUNK_OBJECT_BASIC_FUNCTION;
 	function->parent.name = name;
+
 	function->code = NULL;
 	function->code_length = 0;
 	function->code_allocated = 0;
@@ -214,9 +254,10 @@ uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject*
 }
 
 
-FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, Funk_NativeFn fn) {
-	FunkNativeFunction* function = (FunkNativeFunction*) vm->allocFn(sizeof(FunkNativeFunction));
+FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, FunkNativeFn fn) {
+	FunkNativeFunction* function = (FunkNativeFunction*) allocate_object(vm, sizeof(FunkNativeFunction));
 
+	function->parent.object.type = FUNK_OBJECT_NATIVE_FUNCTION;
 	function->parent.name = name;
 	function->fn = fn;
 
@@ -270,12 +311,14 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 
 static void compile_expression(FunkCompiler* compiler) {
 	consume_token(compiler, FUNK_TOKEN_NAME, "Function name expected");
-	uint16_t name = add_string_constant_for_previous_token(compiler);
 
-	write_uint8_t(compiler, FUNK_INSTRUCTION_GET);
+	uint16_t name = add_string_constant_for_previous_token(compiler);
+	bool is_a_call = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
+
+	write_uint8_t(compiler, is_a_call ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
 	write_uint16_t(compiler, name);
 
-	if (match_token(compiler, FUNK_TOKEN_LEFT_PAREN)) {
+	if (is_a_call) {
 		uint8_t arg_count = 0;
 
 		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
@@ -309,16 +352,139 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 
 	while (compiler.current.type != FUNK_TOKEN_EOF) {
 		compile_expression(&compiler);
+		write_uint8_t(&compiler, FUNK_INSTRUCTION_POP);
 	}
 
-	for (uint16_t i = 0; i < function->code_length; i++) {
-		printf("%i\n", function->code[i]);
-	}
+	write_uint8_t(&compiler, FUNK_INSTRUCTION_RETURN);
 
 	return &function->parent;
 }
 
-FunkVm* funk_create_vm(Funk_AllocFn allocFn, Funk_FreeFn freeFn, Funk_ErrorFn errorFn) {
+void funk_init_table(FunkTable* table) {
+	table->capacity = -1;
+	table->count = 0;
+	table->entries = NULL;
+}
+
+void funk_free_table(FunkVm* vm, FunkTable* table) {
+	if (table->capacity > 0) {
+		vm->freeFn(table->entries);
+	}
+
+	funk_init_table(table);
+}
+
+static FunkTableEntry* find_entry(FunkTableEntry* entries, int capacity, FunkString* key) {
+	uint32_t index = key->hash % capacity;
+	FunkTableEntry* tombstone = NULL;
+
+	while (true) {
+		FunkTableEntry* entry = &entries[index];
+
+		if (entry->key == NULL) {
+			if (entry->value == NULL) {
+				return tombstone != NULL ? tombstone : entry;
+			} else if (tombstone == NULL) {
+				tombstone = entry;
+			}
+		} if (entry->key == key) {
+			return entry;
+		}
+
+		index = (index + 1) % capacity;
+	}
+}
+
+static void adjust_capacity(FunkVm* vm, FunkTable* table, int capacity) {
+	FunkTableEntry* entries = (FunkTableEntry*) vm->allocFn(sizeof(FunkTableEntry) * (capacity + 1));
+
+	for (int i = 0; i <= capacity; i++) {
+		entries[i].key = NULL;
+		entries[i].value = NULL;
+	}
+
+	table->count = 0;
+
+	for (int i = 0; i <= table->capacity; i++) {
+		FunkTableEntry* entry = &table->entries[i];
+
+		if (entry->key == NULL) {
+			continue;
+		}
+
+		FunkTableEntry* destination = find_entry(entries, capacity, entry->key);
+
+		destination->key = entry->key;
+		destination->value = entry->value;
+
+		table->count++;
+	}
+
+	vm->freeFn(table->entries);
+	table->capacity = capacity;
+	table->entries = entries;
+}
+
+bool funk_table_set(FunkVm* vm, FunkTable* table, FunkString* key, FunkObject* value) {
+	if (table->count + 1 > (table->capacity + 1) * TABLE_MAX_LOAD) {
+		int capacity = FUNK_GROW_CAPACITY(table->capacity + 1) - 1;
+		adjust_capacity(vm, table, capacity);
+	}
+
+	FunkTableEntry* entry = find_entry(table->entries, table->capacity, key);
+	bool is_new = entry->key == NULL;
+
+	if (is_new && entry->value == NULL) {
+		table->count++;
+	}
+
+	entry->key = key;
+	entry->value = value;
+
+	return is_new;
+}
+
+bool funk_table_get(FunkTable* table, FunkString* key, FunkObject** value) {
+	if (table->count == 0) {
+		return false;
+	}
+
+	FunkTableEntry* entry = find_entry(table->entries, table->capacity, key);
+
+	if (entry->key == NULL) {
+		return false;
+	}
+
+	*value = entry->value;
+	return true;
+}
+
+FunkString* funk_table_find_string(FunkTable* table, const char* chars, uint16_t length, uint32_t hash) {
+	if (table->count == 0) {
+		return NULL;
+	}
+
+	uint32_t index = hash % table->capacity;
+
+	while (true) {
+		FunkTableEntry* entry = &table->entries[index];
+
+		if (entry->key == NULL) {
+			if (entry->value == NULL) {
+				return NULL;
+			}
+		} else if (entry->key->length == length &&
+       entry->key->hash == hash &&
+       memcmp(entry->key->chars, chars, length) == 0) {
+
+			return entry->key;
+		}
+
+		index = (index + 1) % table->capacity;
+	}
+}
+
+FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn) {
 	FunkVm* vm = (FunkVm*) allocFn(sizeof(FunkVm));
 
 	if (vm == NULL) {
@@ -329,6 +495,10 @@ FunkVm* funk_create_vm(Funk_AllocFn allocFn, Funk_FreeFn freeFn, Funk_ErrorFn er
 	vm->allocFn = allocFn;
 	vm->freeFn = freeFn;
 	vm->errorFn = errorFn;
+	vm->stackTop = vm->stack;
+
+	funk_init_table(&vm->globals);
+	funk_init_table(&vm->strings);
 
 	return vm;
 }
@@ -338,19 +508,120 @@ void funk_free_vm(FunkVm* vm) {
 		return;
 	}
 
+	funk_free_table(vm, &vm->globals);
+	funk_free_table(vm, &vm->strings);
+
+	FunkObject* object = vm->objects;
+
+	while (object != NULL) {
+		FunkObject* next = object->next;
+		funk_free_object(vm, object);
+		object = next;
+	}
+
 	vm->freeFn((void*) vm);
 }
 
-bool funk_run_function(FunkVm* vm, FunkFunction* function) {
+FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 		FunkNativeFunction* nativeFunction = (FunkNativeFunction*) function;
-		nativeFunction->fn(vm, NULL, 0);
-
-		return true;
+		return nativeFunction->fn(vm, NULL, 0);
 	}
+
+	FunkBasicFunction* fn = (FunkBasicFunction*) function;
+	register uint8_t* ip = fn->code;
+
+	#define READ_UINT8() (*ip++)
+	#define READ_UINT16() (ip += 2, (uint16_t) ((ip[-2] << 8) | ip[-1]))
+	#define READ_CONSTANT() (fn->constants[READ_UINT16()])
+	#define PUSH(value) (*vm->stackTop = value, vm->stackTop++)
+	#define POP() (*(--vm->stackTop))
+
+	while (true) {
+		#ifdef FUNK_TRACE_STACK
+			for (FunkFunction** slot = vm->stack; slot < vm->stackTop; slot++) {
+				if (*slot == NULL) {
+					printf("[ null ]");
+					continue;
+				}
+
+				printf("[ %s ]", (*slot)->name->chars);
+			}
+
+			printf("\n");
+		#endif
+
+		switch (*ip++) {
+			case FUNK_INSTRUCTION_RETURN: {
+				return POP();
+			}
+
+			case FUNK_INSTRUCTION_CALL: {
+				uint8_t arg_count = READ_UINT8();
+
+				FunkFunction* callee = *(vm->stackTop - arg_count - 1);
+				FunkFunction* result;
+
+				if (callee->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
+					FunkNativeFunction* nativeFunction = (FunkNativeFunction*) callee;
+					result = nativeFunction->fn(vm, (vm->stackTop - arg_count), arg_count);
+				} else {
+					result = NULL; // TODO
+				}
+
+				vm->stackTop -= arg_count + 1;
+				PUSH(result);
+
+				break;
+			}
+
+			case FUNK_INSTRUCTION_GET: {
+				FunkString* name = (FunkString*) READ_CONSTANT();
+				FunkFunction* result = NULL;
+
+				funk_table_get(&vm->globals, name, (FunkObject**) &result);
+				PUSH(result);
+
+				break;
+			}
+
+			case FUNK_INSTRUCTION_GET_STRING: {
+				FunkString* name = (FunkString*) READ_CONSTANT();
+				FunkFunction* result = NULL;
+
+				if (!funk_table_get(&vm->globals, name, (FunkObject**) &result)) {
+					result = (FunkFunction*) funk_create_basic_function(vm, name);
+				}
+
+				PUSH(result);
+				break;
+			}
+
+			case FUNK_INSTRUCTION_POP: {
+				POP();
+				break;
+			}
+		}
+	}
+
+	#undef READ_UINT8
+	#undef READ_UINT16
+	#undef PUSH
+	#undef POP
+
+	return NULL;
 }
 
-bool funk_run_string(FunkVm* vm, const char* name, const char* string) {
+FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string) {
 	FunkFunction* function = funk_compile_string(vm, name, string);
 	return funk_run_function(vm, function);
+}
+
+void funk_set_global(FunkVm* vm, const char* name, FunkFunction* function) {
+	funk_table_set(vm, &vm->globals, funk_create_string(vm, name, strlen(name)), (FunkObject*) function);
+}
+
+void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn) {
+	FunkString* name_string = funk_create_string(vm, name, strlen(name));
+	funk_table_set(vm, &vm->globals, name_string, (FunkObject*) funk_create_native_function(vm, name_string, fn));
 }
