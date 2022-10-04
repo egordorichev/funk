@@ -137,6 +137,12 @@ typedef void (*FunkFreeFn)(void*);
 typedef void (*FunkErrorFn)(sFunkVm*, const char*);
 
 #define FUNK_STACK_SIZE 256
+#define FUNK_CALL_STACK_SIZE 64
+
+typedef struct FunkCallFrame {
+	FunkBasicFunction* function;
+	uint8_t* ip;
+} FunkCallFrame;
 
 typedef struct sFunkVm {
 	FunkAllocFn allocFn;
@@ -146,6 +152,9 @@ typedef struct sFunkVm {
 	FunkTable globals;
 	FunkTable strings;
 	FunkObject* objects;
+
+	FunkCallFrame frames[FUNK_CALL_STACK_SIZE];
+	uint8_t frame_count;
 
 	FunkFunction* stack[FUNK_STACK_SIZE];
 	FunkFunction** stackTop;

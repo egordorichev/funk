@@ -1,1 +1,5 @@
-print(hello)
+hello() {
+	print(test)
+}
+
+hello()

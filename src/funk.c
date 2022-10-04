@@ -496,6 +496,7 @@ FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn error
 	vm->freeFn = freeFn;
 	vm->errorFn = errorFn;
 	vm->stackTop = vm->stack;
+	vm->frame_count = 0;
 
 	funk_init_table(&vm->globals);
 	funk_init_table(&vm->strings);
@@ -528,12 +529,22 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 		return nativeFunction->fn(vm, NULL, 0);
 	}
 
+	if (vm->frame_count >= FUNK_CALL_STACK_SIZE) {
+		vm->errorFn(vm, "Call stack size exceeded");
+		return NULL;
+	}
+
+	FunkCallFrame* frame = &vm->frames[vm->frame_count++];
+	frame->function = (FunkBasicFunction*) function;
+
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
 	register uint8_t* ip = fn->code;
 
+	frame->ip = ip;
+
 	#define READ_UINT8() (*ip++)
 	#define READ_UINT16() (ip += 2, (uint16_t) ((ip[-2] << 8) | ip[-1]))
-	#define READ_CONSTANT() (fn->constants[READ_UINT16()])
+	#define READ_CONSTANT() (frame->function->constants[READ_UINT16()])
 	#define PUSH(value) (*vm->stackTop = value, vm->stackTop++)
 	#define POP() (*(--vm->stackTop))
 
@@ -562,11 +573,16 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				FunkFunction* callee = *(vm->stackTop - arg_count - 1);
 				FunkFunction* result;
 
+				if (callee == NULL) {
+					vm->errorFn(vm, "Attempt to call a null value");
+					return NULL;
+				}
+
 				if (callee->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 					FunkNativeFunction* nativeFunction = (FunkNativeFunction*) callee;
 					result = nativeFunction->fn(vm, (vm->stackTop - arg_count), arg_count);
 				} else {
-					result = NULL; // TODO
+					result = funk_run_function(vm, callee);
 				}
 
 				vm->stackTop -= arg_count + 1;
