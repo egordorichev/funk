@@ -4,7 +4,7 @@ project(funk C)
 set(CMAKE_C_STANDARD 99)
 
 include_directories(src/)
-add_library(funk src/funk.c)
+add_library(funk src/funk.c src/funk_std.c)
 add_executable(funk_cli src/main.c)
 
 target_link_libraries(funk_cli funk)

@@ -64,11 +64,14 @@ typedef struct FunkFunction {
 	FunkString* name;
 } FunkFunction;
 
+const char* funk_to_string(sFunkVm* vm, FunkFunction* function);
+
 typedef enum {
 	FUNK_INSTRUCTION_RETURN,
 	FUNK_INSTRUCTION_PUSH,
 	FUNK_INSTRUCTION_POP,
-	FUNK_INSTRUCTION_CALL
+	FUNK_INSTRUCTION_CALL,
+	FUNK_INSTRUCTION_GET
 } FunkInstruction;
 
 typedef struct FunkBasicFunction {
@@ -77,12 +80,17 @@ typedef struct FunkBasicFunction {
 	uint8_t* code;
 	uint16_t code_allocated;
 	uint16_t code_length;
+
+	FunkObject** constants;
+	uint16_t constants_allocated;
+	uint16_t constants_length;
 } FunkBasicFunction;
 
 FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name);
-void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, FunkInstruction instruction);
+void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction);
+uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject* constant);
 
-typedef void (*Funk_NativeFn)(sFunkVm*, FunkFunction* args, uint8_t arg_count);
+typedef FunkFunction* (*Funk_NativeFn)(sFunkVm*, FunkFunction* args, uint8_t arg_count);
 
 typedef struct FunkNativeFunction {
 	FunkFunction parent;
@@ -90,6 +98,17 @@ typedef struct FunkNativeFunction {
 } FunkNativeFunction;
 
 FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, Funk_NativeFn fn);
+
+typedef struct FunkCompiler {
+	FunkScanner* scanner;
+	sFunkVm* vm;
+
+	FunkToken previous;
+	FunkToken current;
+	FunkBasicFunction* function;
+} FunkCompiler;
+
+FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* string);
 
 typedef void* (*Funk_AllocFn)(size_t);
 typedef void (*Funk_FreeFn)(void*);
@@ -103,6 +122,9 @@ typedef struct sFunkVm {
 
 FunkVm* funk_create_vm(Funk_AllocFn allocFn, Funk_FreeFn freeFn, Funk_ErrorFn errorFn);
 void funk_free_vm(FunkVm* vm);
-bool funk_run_string(FunkVm* vm, const char* string);
+bool funk_run_function(FunkVm* vm, FunkFunction* function);
+bool funk_run_string(FunkVm* vm, const char* name, const char* string);
+
+#define FUNK_DEFINE_NATIVE_FUNCTION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t arg_count)
 
 #endif

@@ -1,4 +1,6 @@
 #include "funk.h"
+#include "funk_std.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -29,7 +31,8 @@ int run_file(const char* file) {
 	const char* source = read_file(file);
 	FunkVm* vm = funk_create_vm(malloc, free, print_error);
 
-	funk_run_string(vm, source);
+	funk_open_std(vm);
+	funk_run_string(vm, file, source);
 
 	funk_free_vm(vm);
 	free((void*) source);
