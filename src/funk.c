@@ -112,6 +112,8 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 	switch (c) {
 		case '(': return make_token(scanner, FUNK_TOKEN_LEFT_PAREN);
 		case ')': return make_token(scanner, FUNK_TOKEN_RIGHT_PAREN);
+		case '{': return make_token(scanner, FUNK_TOKEN_LEFT_BRACE);
+		case '}': return make_token(scanner, FUNK_TOKEN_RIGHT_BRACE);
 		case ',': return make_token(scanner, FUNK_TOKEN_COMMA);
 
 		default: return make_token(scanner, FUNK_TOKEN_EOF);
@@ -204,53 +206,54 @@ FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
 
 	function->parent.object.type = FUNK_OBJECT_BASIC_FUNCTION;
 	function->parent.name = name;
+	function->argCount = 0;
 
 	function->code = NULL;
-	function->code_length = 0;
-	function->code_allocated = 0;
+	function->codeLength = 0;
+	function->codeAllocated = 0;
 
 	function->constants = NULL;
-	function->constants_allocated = 0;
-	function->constants_length = 0;
+	function->constantsAllocated = 0;
+	function->constantsLength = 0;
 
 	return function;
 }
 
 void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction) {
-	if (function->code_allocated < function->code_length + 1) {
-		uint16_t new_size = FUNK_GROW_CAPACITY(function->code_allocated);
+	if (function->codeAllocated < function->codeLength + 1) {
+		uint16_t new_size = FUNK_GROW_CAPACITY(function->codeAllocated);
 		uint8_t* new_chunk = (uint8_t*) vm->allocFn(sizeof(uint8_t) * new_size);
 
-		memcpy((void*) new_chunk, (void*) function->code, function->code_allocated);
+		memcpy((void*) new_chunk, (void*) function->code, function->codeAllocated);
 		vm->freeFn((void*) function->code);
 
 		function->code = new_chunk;
-		function->code_allocated = new_size;
+		function->codeAllocated = new_size;
 	}
 
-	function->code[function->code_length++] = instruction;
+	function->code[function->codeLength++] = instruction;
 }
 
 uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject* constant) {
-	for (uint16_t i = 0; i < function->constants_length; i++) {
+	for (uint16_t i = 0; i < function->constantsLength; i++) {
 		if (function->constants[i] == constant) {
 			return i;
 		}
 	}
 
-	if (function->constants_allocated < function->constants_length + 1) {
-		uint16_t new_size = FUNK_GROW_CAPACITY(function->constants_allocated);
+	if (function->constantsAllocated < function->constantsLength + 1) {
+		uint16_t new_size = FUNK_GROW_CAPACITY(function->constantsAllocated);
 		FunkObject** new_constants = (FunkObject**) vm->allocFn(sizeof(FunkObject*) * new_size);
 
-		memcpy((void*) new_constants, (void*) function->constants, function->constants_allocated);
+		memcpy((void*) new_constants, (void*) function->constants, function->constantsAllocated);
 		vm->freeFn((void*) function->constants);
 
 		function->constants = new_constants;
-		function->constants_allocated = new_size;
+		function->constantsAllocated = new_size;
 	}
 
-	function->constants[function->constants_length++] = (FunkObject*) constant;
-	return function->constants_length - 1;
+	function->constants[function->constantsLength++] = (FunkObject*) constant;
+	return function->constantsLength - 1;
 }
 
 
@@ -312,26 +315,66 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 static void compile_expression(FunkCompiler* compiler) {
 	consume_token(compiler, FUNK_TOKEN_NAME, "Function name expected");
 
-	uint16_t name = add_string_constant_for_previous_token(compiler);
-	bool is_a_call = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
+	if (compiler->previous.length == 8 && memcmp(compiler->previous.start, "function", 8) == 0) {
+		consume_token(compiler, FUNK_TOKEN_NAME, "Expected function name");
 
-	write_uint8_t(compiler, is_a_call ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
+		FunkVm* vm = compiler->vm;
+		FunkBasicFunction* oldFunction = compiler->function;
+		FunkString* name = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
+
+		compiler->function = funk_create_basic_function(vm,  name);
+
+		consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
+
+		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
+			do {
+				consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
+				compile_expression(compiler);
+
+				compiler->function->argCount++;
+			} while (match_token(compiler, FUNK_TOKEN_COMMA));
+
+			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
+		}
+
+		consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
+
+		while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
+			compile_expression(compiler);
+		}
+
+		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
+		write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+		FunkObject* newFunction = (FunkObject*) compiler->function;
+		compiler->function = oldFunction;
+
+		write_uint8_t(compiler, FUNK_INSTRUCTION_DEFINE);
+		write_uint16_t(compiler, funk_add_constant(vm, oldFunction, newFunction));
+
+		return;
+	}
+
+	uint16_t name = add_string_constant_for_previous_token(compiler);
+	bool isACall = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
+
+	write_uint8_t(compiler, isACall ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
 	write_uint16_t(compiler, name);
 
-	if (is_a_call) {
-		uint8_t arg_count = 0;
+	if (isACall) {
+		uint8_t argCount = 0;
 
 		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
 			do {
 				compile_expression(compiler);
-				arg_count++;
+				argCount++;
 			} while (match_token(compiler, FUNK_TOKEN_COMMA));
 
 			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "')' expected after function arguments");
 		}
 
 		write_uint8_t(compiler, FUNK_INSTRUCTION_CALL);
-		write_uint8_t(compiler, arg_count);
+		write_uint8_t(compiler, argCount);
 	}
 }
 
@@ -352,7 +395,6 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 
 	while (compiler.current.type != FUNK_TOKEN_EOF) {
 		compile_expression(&compiler);
-		write_uint8_t(&compiler, FUNK_INSTRUCTION_POP);
 	}
 
 	write_uint8_t(&compiler, FUNK_INSTRUCTION_RETURN);
@@ -496,7 +538,6 @@ FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn error
 	vm->freeFn = freeFn;
 	vm->errorFn = errorFn;
 	vm->stackTop = vm->stack;
-	vm->frame_count = 0;
 
 	funk_init_table(&vm->globals);
 	funk_init_table(&vm->strings);
@@ -529,27 +570,21 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 		return nativeFunction->fn(vm, NULL, 0);
 	}
 
-	if (vm->frame_count >= FUNK_CALL_STACK_SIZE) {
-		vm->errorFn(vm, "Call stack size exceeded");
-		return NULL;
-	}
-
-	FunkCallFrame* frame = &vm->frames[vm->frame_count++];
-	frame->function = (FunkBasicFunction*) function;
-
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
-	register uint8_t* ip = fn->code;
 
-	frame->ip = ip;
+	register uint8_t* ip = fn->code;
+	FunkObject** constants = fn->constants;
 
 	#define READ_UINT8() (*ip++)
 	#define READ_UINT16() (ip += 2, (uint16_t) ((ip[-2] << 8) | ip[-1]))
-	#define READ_CONSTANT() (frame->function->constants[READ_UINT16()])
+	#define READ_CONSTANT() (constants[READ_UINT16()])
 	#define PUSH(value) (*vm->stackTop = value, vm->stackTop++)
 	#define POP() (*(--vm->stackTop))
 
 	while (true) {
 		#ifdef FUNK_TRACE_STACK
+			printf("%s ", funkInstructionNames[*ip]);
+
 			for (FunkFunction** slot = vm->stack; slot < vm->stackTop; slot++) {
 				if (*slot == NULL) {
 					printf("[ null ]");
@@ -568,9 +603,10 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 			}
 
 			case FUNK_INSTRUCTION_CALL: {
-				uint8_t arg_count = READ_UINT8();
+				uint8_t argCount = READ_UINT8();
 
-				FunkFunction* callee = *(vm->stackTop - arg_count - 1);
+				FunkFunction** stackTop = vm->stackTop - argCount - 1;
+				FunkFunction* callee = *stackTop;
 				FunkFunction* result;
 
 				if (callee == NULL) {
@@ -580,12 +616,19 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 				if (callee->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 					FunkNativeFunction* nativeFunction = (FunkNativeFunction*) callee;
-					result = nativeFunction->fn(vm, (vm->stackTop - arg_count), arg_count);
+					result = nativeFunction->fn(vm, (vm->stackTop - argCount), argCount);
 				} else {
+					FunkBasicFunction* basicFunction = (FunkBasicFunction*) callee;
+					vm->stackTop = stackTop;
+
+					for (uint8_t i = argCount; i < basicFunction->argCount; i++) {
+						vm->stackTop[i + 1] = NULL;
+					}
+
 					result = funk_run_function(vm, callee);
 				}
 
-				vm->stackTop -= arg_count + 1;
+				vm->stackTop = stackTop - 1;
 				PUSH(result);
 
 				break;
@@ -616,6 +659,23 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 			case FUNK_INSTRUCTION_POP: {
 				POP();
 				break;
+			}
+
+			case FUNK_INSTRUCTION_DEFINE: {
+				FunkBasicFunction* basicFunction = (FunkBasicFunction*) READ_CONSTANT();
+				funk_table_set(vm, &vm->globals, basicFunction->parent.name, (FunkObject*) basicFunction);
+
+				break;
+			}
+
+			case FUNK_INSTRUCTION_PUSH_NULL: {
+				PUSH(NULL);
+				break;
+			}
+
+			default: {
+				vm->errorFn(vm, "Unknown instruction");
+				return NULL;
 			}
 		}
 	}
