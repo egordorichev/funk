@@ -1,5 +1,7 @@
-if (false, () => {
-	print(yes)
-}, () => {
-	print(no)
+print(not(test))
+
+while(() => not(test), () => {
+	print(sike)
+	set(test, true)
+	// print(not(test))
 })

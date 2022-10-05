@@ -341,6 +341,7 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 }
 
 static void compile_expression(FunkCompiler* compiler);
+static void compile_declaration(FunkCompiler* compiler);
 
 static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, bool lambda) {
 	FunkVm* vm = compiler->vm;
@@ -365,18 +366,29 @@ static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, 
 		consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
 	}
 
+	bool compiledBody = false;
+
 	if (lambda) {
 		consume_token(compiler, FUNK_TOKEN_ARROW, "Expected '=>' after function arguments");
+
+		if (compiler->current.type != FUNK_TOKEN_LEFT_BRACE) {
+			compile_expression(compiler);
+			write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+			compiledBody = true;
+		}
 	}
 
-	consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
+	if (!compiledBody) {
+		consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
 
-	while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
-		compile_expression(compiler);
+		while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
+			compile_declaration(compiler);
+		}
+
+		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
+		write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
 	}
-
-	write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
-	write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
 
 	FunkObject* newFunction = (FunkObject*) compiler->function;
 	compiler->function = oldFunction;
@@ -651,6 +663,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 	register uint8_t* ip = fn->code;
 	FunkObject** constants = fn->constants;
+	FunkFunction** initialStackTop = vm->stackTop;
 
 	FunkCallFrame callFrame;
 
@@ -688,8 +701,9 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 		switch (*ip++) {
 			case FUNK_INSTRUCTION_RETURN: {
 				vm->callFrame = callFrame.previous;
-				funk_free_table(vm, &callFrame.variables);
+				vm->stackTop = initialStackTop;
 
+				funk_free_table(vm, &callFrame.variables);
 				return POP();
 			}
 
@@ -706,6 +720,8 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 				if (callee == NULL) {
 					vm->errorFn(vm, "Attempt to call a null value");
+					vm->stackTop = initialStackTop;
+
 					return NULL;
 				}
 
@@ -812,6 +828,8 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 			default: {
 				vm->errorFn(vm, "Unknown instruction");
+				vm->stackTop = initialStackTop;
+
 				return NULL;
 			}
 		}
@@ -856,8 +874,25 @@ void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function) {
 		return;
 	}
 
+	FunkCallFrame* currentFrame = vm->callFrame;
 	FunkString* name_string = funk_create_string(vm, name, strlen(name));
-	funk_table_set(vm, &vm->callFrame->variables, name_string, (FunkObject*) function);
+	FunkFunction* result = NULL;
+
+	do {
+		FunkTable* table = currentFrame == NULL ? &vm->globals : &currentFrame->variables;
+
+		if (funk_table_get(table, name_string, (FunkObject**) &result)) {
+			funk_table_set(vm, table, name_string, (FunkObject*) function);
+			return;
+		}
+
+		if (currentFrame == NULL) {
+			funk_table_set(vm, &vm->callFrame->variables, name_string, (FunkObject*) function);
+			break;
+		}
+
+		currentFrame = currentFrame->previous;
+	} while (true);
 }
 
 FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {

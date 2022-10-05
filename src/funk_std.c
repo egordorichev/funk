@@ -43,11 +43,23 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_if) {
 	return NULL;
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(_while) {
+	FUNK_ENSURE_ARG_COUNT(2);
+
+	while (funk_is_true(args[0])) {
+		funk_run_function(vm, args[1]);
+	}
+
+	return NULL;
+}
+
 void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("print", print);
 	FUNK_DEFINE_FUNCTION("set", set);
 	FUNK_DEFINE_FUNCTION("equal", equal);
 	FUNK_DEFINE_FUNCTION("notEqual", notEqual);
 	FUNK_DEFINE_FUNCTION("not", not);
+
 	FUNK_DEFINE_FUNCTION("if", _if);
+	FUNK_DEFINE_FUNCTION("while", _while);
 }
