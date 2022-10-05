@@ -1,6 +1,8 @@
 #include "funk.h"
+
 #include <string.h>
 #include <printf.h>
+#include <math.h>
 
 void funk_init_scanner(FunkScanner* scanner, const char* code) {
 	scanner->start = code;
@@ -88,7 +90,7 @@ static FunkToken make_token(FunkScanner* scanner, FunkTokenType type) {
 }
 
 static bool is_alpha(char c) {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '.' || c == '-';
 }
 
 static FunkTokenType decide_token_type(FunkScanner* scanner) {
@@ -219,12 +221,8 @@ FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) 
 	return string;
 }
 
-const char* funk_to_string(sFunkVm* vm, FunkFunction* function) {
-	if (function == NULL) {
-		return "null";
-	}
-
-	return function->name->chars;
+const char* funk_to_string(FunkFunction* function) {
+	return function == NULL ? "null" : function->name->chars;
 }
 
 FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
@@ -344,38 +342,40 @@ static void compile_expression(FunkCompiler* compiler);
 static void compile_declaration(FunkCompiler* compiler);
 
 static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, bool lambda) {
-	FunkVm* vm = compiler->vm;
 	FunkBasicFunction* oldFunction = compiler->function;
-
-	compiler->function = funk_create_basic_function(vm,  name);
-	consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
-
-	if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
-		FunkString* argumentNames[256];
-
-		do {
-			consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
-			argumentNames[compiler->function->argumentCount++] = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
-		} while (match_token(compiler, FUNK_TOKEN_COMMA));
-
-		size_t size = sizeof(FunkString*) * compiler->function->argumentCount;
-		compiler->function->argumentNames = (FunkString**) vm->allocFn(size);
-
-		memcpy((void*) compiler->function->argumentNames, argumentNames, size);
-
-		consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
-	}
-
+	FunkVm* vm = compiler->vm;
 	bool compiledBody = false;
 
-	if (lambda) {
-		consume_token(compiler, FUNK_TOKEN_ARROW, "Expected '=>' after function arguments");
+	compiler->function = funk_create_basic_function(vm,  name);
 
-		if (compiler->current.type != FUNK_TOKEN_LEFT_BRACE) {
-			compile_expression(compiler);
-			write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+	if (!lambda || compiler->current.type != FUNK_TOKEN_LEFT_BRACE) {
+		consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
 
-			compiledBody = true;
+		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
+			FunkString* argumentNames[256];
+
+			do {
+				consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
+				argumentNames[compiler->function->argumentCount++] = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
+			} while (match_token(compiler, FUNK_TOKEN_COMMA));
+
+			size_t size = sizeof(FunkString*) * compiler->function->argumentCount;
+			compiler->function->argumentNames = (FunkString**) vm->allocFn(size);
+
+			memcpy((void*) compiler->function->argumentNames, argumentNames, size);
+
+			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
+		}
+
+		if (lambda) {
+			consume_token(compiler, FUNK_TOKEN_ARROW, "Expected '=>' after function arguments");
+
+			if (compiler->current.type != FUNK_TOKEN_LEFT_BRACE) {
+				compile_expression(compiler);
+				write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+				compiledBody = true;
+			}
 		}
 	}
 
@@ -404,7 +404,7 @@ static void compile_expression(FunkCompiler* compiler) {
 		return;
 	}
 
-	if (compiler->current.type == FUNK_TOKEN_LEFT_PAREN) {
+	if (compiler->current.type == FUNK_TOKEN_LEFT_PAREN || compiler->current.type == FUNK_TOKEN_LEFT_BRACE) {
 		char buffer[256];
 		sprintf(buffer, "lamba %s %i", compiler->function->parent.name->chars, compiler->previous.line);
 
@@ -723,7 +723,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				FunkFunction* result;
 
 				#ifdef FUNK_TRACE_STACK
-					printf(" %s %i", funk_to_string(vm, callee), argumentCount);
+					printf(" %s %i", funk_to_string(callee), argumentCount);
 				#endif
 
 				if (callee == NULL) {
@@ -777,7 +777,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				PUSH(result);
 
 				#ifdef FUNK_TRACE_STACK
-					printf(" %s", funk_to_string(vm, result));
+					printf(" %s => %s", name->chars, funk_to_string(result));
 				#endif
 
 				break;
@@ -805,7 +805,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				}
 
 				#ifdef FUNK_TRACE_STACK
-					printf(" %s", funk_to_string(vm, result));
+					printf(" %s => %s", name->chars, funk_to_string(result));
 				#endif
 
 				PUSH(result);
@@ -822,7 +822,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				funk_table_set(vm, &callFrame.variables, basicFunction->parent.name, (FunkObject*) basicFunction);
 
 				#ifdef FUNK_TRACE_STACK
-					printf(" %s", funk_to_string(vm, (FunkFunction*) basicFunction));
+					printf(" %s", funk_to_string((FunkFunction*) basicFunction));
 				#endif
 
 				break;
@@ -937,4 +937,77 @@ void funk_error(FunkVm* vm, const char* error) {
 
 bool funk_is_true(FunkFunction* function) {
 	return strcmp(function->name->chars, "true") == 0;
+}
+
+uint32_t parse_roman_numeral(const char* string, uint16_t length) {
+	uint32_t value = 0;
+
+	for (uint16_t i = 0; i < length; i++) {
+		if (string[i] == 'I' && string[i + 1] == 'V') {
+			value += 4;
+		} else if (string[i] == 'I' && string[i + 1] == 'X') {
+			value += 9;
+		} else if (string[i] == 'X' && string[i + 1] == 'L') {
+			value += 40;
+		} else if (string[i] == 'X' && string[i + 1] == 'C') {
+			value += 90;
+		} else if (string[i] == 'C' && string[i + 1] == 'D') {
+			value += 400;
+		} else if (string[i] == 'C' && string[i + 1] == 'M') {
+			value += 900;
+		} else {
+			switch (string[i]) {
+				case 'I': value += 1; break;
+				case 'V': value += 5; break;
+				case 'X': value += 10; break;
+				case 'L': value += 50; break;
+				case 'C': value += 100; break;
+				case 'D': value += 500; break;
+				case 'M': value += 1000; break;
+
+				default: break;
+			}
+
+			continue;
+		}
+
+		i++;
+	}
+
+	return value;
+}
+
+uint16_t calculate_number_of_places(uint32_t n) {
+	uint16_t r = 1;
+
+	while (n > 9) {
+		n /= 10;
+		r++;
+	}
+
+	return r;
+}
+
+double funk_to_number(FunkVm* vm, FunkFunction* function) {
+	const char* string = function->name->chars;
+	uint16_t length = function->name->length;
+	bool negative = false;
+
+	if (string[0] == '-') {
+		negative = true;
+		string++;
+		length--;
+	}
+
+	const char* dot = strchr(string, '.');
+	double value = 0;
+
+	if (dot != NULL) {
+		length = dot - string;
+		uint32_t afterDot = parse_roman_numeral(dot + 1, function->name->length - length - 1);
+
+		value += (double) afterDot / (pow(10, calculate_number_of_places(afterDot)));
+	}
+
+	return (value + parse_roman_numeral(string, length)) * (negative ? -1 : 1);
 }

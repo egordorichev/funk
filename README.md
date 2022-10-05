@@ -8,6 +8,8 @@ A language with the only data type being a function!
 * For
 * std
 * exit compilation upon error
+* space multiplication
+* char(byte)
 
 ### Possible future improvements
 

@@ -1,9 +1,13 @@
-function a() {
-	function b() {
-		print(test)
-	}
+/*printNumber(-XI)
+printNumber(I.I)
 
-	return b
+print(substring(hello, I, II)) // el
+print(substring(hello, NULLA)) // h*/
+
+function a(z) {
+	z()
 }
 
-a()()
+a({
+	print(hi)
+})

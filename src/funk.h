@@ -72,7 +72,7 @@ typedef struct FunkFunction {
 	FunkString* name;
 } FunkFunction;
 
-const char* funk_to_string(sFunkVm* vm, FunkFunction* function);
+const char* funk_to_string(FunkFunction* function);
 
 typedef enum {
 	FUNK_INSTRUCTION_RETURN,
@@ -211,5 +211,6 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
 
 void funk_error(FunkVm* vm, const char* error);
 bool funk_is_true(FunkFunction* function);
+double funk_to_number(FunkVm* vm, FunkFunction* function);
 
 #endif

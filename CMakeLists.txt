@@ -7,5 +7,5 @@ include_directories(src/)
 add_library(funk src/funk.c src/funk_std.c)
 add_executable(funk_cli src/main.c)
 
-target_link_libraries(funk_cli funk)
+target_link_libraries(funk_cli funk m)
 set_target_properties(funk_cli PROPERTIES OUTPUT_NAME funk)
