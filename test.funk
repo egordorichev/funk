@@ -1,5 +1,9 @@
-function hello() {
-	print(test)
+function test(z) {
+	return z()
 }
 
-hello()
+function what() {
+	return hello
+}
+
+print(test(what))

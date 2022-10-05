@@ -4,12 +4,13 @@ A language with the only data type being a function!
 
 ### Todo before release
 
-* return values
-* Local variables
+* lambdas
+* setting variables
 * If
 * While
 * For
 * std
+* exit compilation upon error
 
 ### Possible future improvements
 

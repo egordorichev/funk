@@ -17,6 +17,9 @@ typedef enum {
 	FUNK_TOKEN_LEFT_BRACE, FUNK_TOKEN_RIGHT_BRACE,
 	FUNK_TOKEN_COMMA,
 
+	FUNK_TOKEN_FUNCTION,
+	FUNK_TOKEN_RETURN,
+
 	FUNK_TOKEN_EOF
 } FunkTokenType;
 
@@ -79,6 +82,7 @@ typedef enum {
 	FUNK_INSTRUCTION_PUSH_NULL
 } FunkInstruction;
 
+// Uncomment for execution debug
 // #define FUNK_TRACE_STACK
 
 #ifdef FUNK_TRACE_STACK
@@ -95,7 +99,9 @@ static const char* funkInstructionNames[] = {
 
 typedef struct FunkBasicFunction {
 	FunkFunction parent;
-	uint8_t argCount;
+
+	FunkString** argumentNames;
+	uint8_t argumentCount;
 
 	uint8_t* code;
 	uint16_t codeAllocated;
@@ -122,6 +128,8 @@ FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, F
 typedef struct FunkCompiler {
 	FunkScanner* scanner;
 	sFunkVm* vm;
+
+	bool hadError;
 
 	FunkToken previous;
 	FunkToken current;
@@ -154,6 +162,13 @@ typedef void* (*FunkAllocFn)(size_t);
 typedef void (*FunkFreeFn)(void*);
 typedef void (*FunkErrorFn)(sFunkVm*, const char*);
 
+typedef struct FunkCallFrame {
+	FunkBasicFunction* function;
+	FunkTable variables;
+
+	struct FunkCallFrame* previous;
+} FunkCallFrame;
+
 #define FUNK_STACK_SIZE 256
 
 typedef struct sFunkVm {
@@ -161,12 +176,13 @@ typedef struct sFunkVm {
 	FunkFreeFn freeFn;
 	FunkErrorFn errorFn;
 
-	FunkTable globals;
 	FunkTable strings;
 	FunkObject* objects;
+	FunkTable globals;
 
 	FunkFunction* stack[FUNK_STACK_SIZE];
 	FunkFunction** stackTop;
+	FunkCallFrame* callFrame;
 } FunkVm;
 
 FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn);

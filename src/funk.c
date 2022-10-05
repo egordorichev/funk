@@ -91,6 +91,18 @@ static bool is_alpha(char c) {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
+static FunkTokenType decide_token_type(FunkScanner* scanner) {
+	uint16_t length = (uint16_t) (scanner->current - scanner->start);
+
+	if (length == 8 && memcmp(scanner->start, "function", 8) == 0) {
+		return FUNK_TOKEN_FUNCTION;
+	} else if (length == 6 && memcmp(scanner->start, "return", 6) == 0) {
+		return FUNK_TOKEN_RETURN;
+	}
+
+	return FUNK_TOKEN_NAME;
+}
+
 FunkToken funk_scan_token(FunkScanner* scanner) {
 	skip_whitespace(scanner);
 	scanner->start = scanner->current;
@@ -106,7 +118,7 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 			advance_char(scanner);
 		}
 
-		return make_token(scanner, FUNK_TOKEN_NAME);
+		return make_token(scanner, decide_token_type(scanner));
 	}
 
 	switch (c) {
@@ -124,6 +136,10 @@ void funk_free_object(sFunkVm* vm, FunkObject* object) {
 	switch (object->type) {
 		case FUNK_OBJECT_BASIC_FUNCTION: {
 			FunkBasicFunction* function = (FunkBasicFunction*) object;
+
+			if (function->argumentNames != NULL) {
+				vm->freeFn((void*) function->argumentNames);
+			}
 
 			if (function->code != NULL) {
 				vm->freeFn((void *) function->code);
@@ -198,6 +214,10 @@ FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) 
 }
 
 const char* funk_to_string(sFunkVm* vm, FunkFunction* function) {
+	if (function == NULL) {
+		return "null";
+	}
+
 	return function->name->chars;
 }
 
@@ -206,7 +226,8 @@ FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
 
 	function->parent.object.type = FUNK_OBJECT_BASIC_FUNCTION;
 	function->parent.name = name;
-	function->argCount = 0;
+	function->argumentCount = 0;
+	function->argumentNames = NULL;
 
 	function->code = NULL;
 	function->codeLength = 0;
@@ -275,6 +296,7 @@ static void advance_token(FunkCompiler* compiler) {
 static void compilation_error(FunkCompiler* compiler, const char* error) {
 	// TODO: print the line
 	compiler->vm->errorFn(compiler->vm, error);
+	compiler->hadError = true;
 }
 
 static void consume_token(FunkCompiler* compiler, FunkTokenType type, const char* message) {
@@ -313,9 +335,40 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 }
 
 static void compile_expression(FunkCompiler* compiler) {
+	if (match_token(compiler, FUNK_TOKEN_RETURN)) {
+		compile_expression(compiler);
+		write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+		return;
+	}
+
 	consume_token(compiler, FUNK_TOKEN_NAME, "Function name expected");
 
-	if (compiler->previous.length == 8 && memcmp(compiler->previous.start, "function", 8) == 0) {
+	uint16_t name = add_string_constant_for_previous_token(compiler);
+	bool isACall = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
+
+	write_uint8_t(compiler, isACall ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
+	write_uint16_t(compiler, name);
+
+	if (isACall) {
+		uint8_t argumentCount = 0;
+
+		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
+			do {
+				compile_expression(compiler);
+				argumentCount++;
+			} while (match_token(compiler, FUNK_TOKEN_COMMA));
+
+			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "')' expected after function arguments");
+		}
+
+		write_uint8_t(compiler, FUNK_INSTRUCTION_CALL);
+		write_uint8_t(compiler, argumentCount);
+	}
+}
+
+static void compile_declaration(FunkCompiler* compiler) {
+	if (match_token(compiler, FUNK_TOKEN_FUNCTION)) {
 		consume_token(compiler, FUNK_TOKEN_NAME, "Expected function name");
 
 		FunkVm* vm = compiler->vm;
@@ -327,12 +380,17 @@ static void compile_expression(FunkCompiler* compiler) {
 		consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
 
 		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
+			FunkString* argumentNames[256];
+
 			do {
 				consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
-				compile_expression(compiler);
-
-				compiler->function->argCount++;
+				argumentNames[compiler->function->argumentCount++] = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
 			} while (match_token(compiler, FUNK_TOKEN_COMMA));
+
+			size_t size = sizeof(FunkString*) * compiler->function->argumentCount;
+			compiler->function->argumentNames = (FunkString**) vm->allocFn(size);
+
+			memcpy((void*) compiler->function->argumentNames, argumentNames, size);
 
 			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
 		}
@@ -355,27 +413,8 @@ static void compile_expression(FunkCompiler* compiler) {
 		return;
 	}
 
-	uint16_t name = add_string_constant_for_previous_token(compiler);
-	bool isACall = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
-
-	write_uint8_t(compiler, isACall ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
-	write_uint16_t(compiler, name);
-
-	if (isACall) {
-		uint8_t argCount = 0;
-
-		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
-			do {
-				compile_expression(compiler);
-				argCount++;
-			} while (match_token(compiler, FUNK_TOKEN_COMMA));
-
-			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "')' expected after function arguments");
-		}
-
-		write_uint8_t(compiler, FUNK_INSTRUCTION_CALL);
-		write_uint8_t(compiler, argCount);
-	}
+	compile_expression(compiler);
+	write_uint8_t(compiler, FUNK_INSTRUCTION_POP);
 }
 
 FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* string) {
@@ -388,18 +427,19 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 	FunkCompiler compiler;
 
 	compiler.vm = vm;
+	compiler.hadError = false;
 	compiler.scanner = &scanner;
 	compiler.function = function;
 
 	advance_token(&compiler);
 
 	while (compiler.current.type != FUNK_TOKEN_EOF) {
-		compile_expression(&compiler);
+		compile_declaration(&compiler);
 	}
 
 	write_uint8_t(&compiler, FUNK_INSTRUCTION_RETURN);
 
-	return &function->parent;
+	return compiler.hadError ? NULL : &function->parent;
 }
 
 void funk_init_table(FunkTable* table) {
@@ -538,9 +578,10 @@ FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn error
 	vm->freeFn = freeFn;
 	vm->errorFn = errorFn;
 	vm->stackTop = vm->stack;
+	vm->callFrame = NULL;
 
-	funk_init_table(&vm->globals);
 	funk_init_table(&vm->strings);
+	funk_init_table(&vm->globals);
 
 	return vm;
 }
@@ -550,8 +591,8 @@ void funk_free_vm(FunkVm* vm) {
 		return;
 	}
 
-	funk_free_table(vm, &vm->globals);
 	funk_free_table(vm, &vm->strings);
+	funk_free_table(vm, &vm->globals);
 
 	FunkObject* object = vm->objects;
 
@@ -565,6 +606,10 @@ void funk_free_vm(FunkVm* vm) {
 }
 
 FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
+	if (function == NULL) {
+		return NULL;
+	}
+
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 		FunkNativeFunction* nativeFunction = (FunkNativeFunction*) function;
 		return nativeFunction->fn(vm, NULL, 0);
@@ -574,6 +619,19 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 	register uint8_t* ip = fn->code;
 	FunkObject** constants = fn->constants;
+
+	FunkCallFrame callFrame;
+
+	callFrame.function = fn;
+	callFrame.previous = vm->callFrame;
+
+	funk_init_table(&callFrame.variables);
+
+	for (uint8_t i = 0; i < fn->argumentCount; i++) {
+		funk_table_set(vm, &callFrame.variables, fn->argumentNames[i], (FunkObject*) *(vm->stackTop + 1 + i));
+	}
+
+	vm->callFrame = &callFrame;
 
 	#define READ_UINT8() (*ip++)
 	#define READ_UINT16() (ip += 2, (uint16_t) ((ip[-2] << 8) | ip[-1]))
@@ -593,21 +651,26 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 				printf("[ %s ]", (*slot)->name->chars);
 			}
-
-			printf("\n");
 		#endif
 
 		switch (*ip++) {
 			case FUNK_INSTRUCTION_RETURN: {
+				vm->callFrame = callFrame.previous;
+				funk_free_table(vm, &callFrame.variables);
+
 				return POP();
 			}
 
 			case FUNK_INSTRUCTION_CALL: {
-				uint8_t argCount = READ_UINT8();
+				uint8_t argumentCount = READ_UINT8();
 
-				FunkFunction** stackTop = vm->stackTop - argCount - 1;
+				FunkFunction** stackTop = vm->stackTop - argumentCount - 1;
 				FunkFunction* callee = *stackTop;
 				FunkFunction* result;
+
+				#ifdef FUNK_TRACE_STACK
+					printf(" %s %i", funk_to_string(vm, callee), argumentCount);
+				#endif
 
 				if (callee == NULL) {
 					vm->errorFn(vm, "Attempt to call a null value");
@@ -616,19 +679,19 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 				if (callee->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 					FunkNativeFunction* nativeFunction = (FunkNativeFunction*) callee;
-					result = nativeFunction->fn(vm, (vm->stackTop - argCount), argCount);
+					result = nativeFunction->fn(vm, (vm->stackTop - argumentCount), argumentCount);
 				} else {
 					FunkBasicFunction* basicFunction = (FunkBasicFunction*) callee;
 					vm->stackTop = stackTop;
 
-					for (uint8_t i = argCount; i < basicFunction->argCount; i++) {
+					for (uint8_t i = argumentCount; i < basicFunction->argumentCount; i++) {
 						vm->stackTop[i + 1] = NULL;
 					}
 
 					result = funk_run_function(vm, callee);
 				}
 
-				vm->stackTop = stackTop - 1;
+				vm->stackTop = stackTop;
 				PUSH(result);
 
 				break;
@@ -637,9 +700,25 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 			case FUNK_INSTRUCTION_GET: {
 				FunkString* name = (FunkString*) READ_CONSTANT();
 				FunkFunction* result = NULL;
+				FunkCallFrame* currentFrame = &callFrame;
 
-				funk_table_get(&vm->globals, name, (FunkObject**) &result);
+				bool hadResult = false;
+
+				do {
+					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &callFrame.variables, name, (FunkObject**) &result);
+
+					if (currentFrame == NULL) {
+						break;
+					}
+
+					currentFrame = currentFrame->previous;
+				} while (!hadResult);
+
 				PUSH(result);
+
+				#ifdef FUNK_TRACE_STACK
+					printf(" %s", funk_to_string(vm, result));
+				#endif
 
 				break;
 			}
@@ -647,10 +726,27 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 			case FUNK_INSTRUCTION_GET_STRING: {
 				FunkString* name = (FunkString*) READ_CONSTANT();
 				FunkFunction* result = NULL;
+				FunkCallFrame* currentFrame = &callFrame;
 
-				if (!funk_table_get(&vm->globals, name, (FunkObject**) &result)) {
+				bool hadResult = false;
+
+				do {
+					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &callFrame.variables, name, (FunkObject**) &result);
+
+					if (currentFrame == NULL) {
+						break;
+					}
+
+					currentFrame = currentFrame->previous;
+				} while (!hadResult);
+
+				if (!hadResult) {
 					result = (FunkFunction*) funk_create_basic_function(vm, name);
 				}
+
+				#ifdef FUNK_TRACE_STACK
+					printf(" %s", funk_to_string(vm, result));
+				#endif
 
 				PUSH(result);
 				break;
@@ -663,7 +759,11 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 			case FUNK_INSTRUCTION_DEFINE: {
 				FunkBasicFunction* basicFunction = (FunkBasicFunction*) READ_CONSTANT();
-				funk_table_set(vm, &vm->globals, basicFunction->parent.name, (FunkObject*) basicFunction);
+				funk_table_set(vm, &callFrame.variables, basicFunction->parent.name, (FunkObject*) basicFunction);
+
+				#ifdef FUNK_TRACE_STACK
+					printf(" %s", funk_to_string(vm, (FunkFunction*) basicFunction));
+				#endif
 
 				break;
 			}
@@ -678,6 +778,10 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				return NULL;
 			}
 		}
+
+		#ifdef FUNK_TRACE_STACK
+				printf("\n");
+		#endif
 	}
 
 	#undef READ_UINT8
