@@ -1,13 +1,1 @@
-/*for(NULLA, X, (i) => {
-	print(i)
-})*/
-
-function fib(n) {
-	return if(
-		less(n, II),
-		n,
-		() => add(fib(subtract(n, II)), fib(subtract(n, I)))
-	)
-}
-
-printNumber(fib(X))
+print(add(X.III, I.II))

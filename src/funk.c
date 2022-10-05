@@ -676,7 +676,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
 
 	if (fn->codeLength == 0) {
-		return fn;
+		return function;
 	}
 
 	register uint8_t* ip = fn->code;
@@ -1162,6 +1162,7 @@ FunkFunction* funk_number_to_string(FunkVm* vm, double number) {
 	}
 
 	memcpy((void*) (buffer + index), digitsString->chars, digitsString->length);
+	index += digitsString->length;
 
 	if (fractionString != NULL) {
 		buffer[index++] = '.';
