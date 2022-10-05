@@ -705,7 +705,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				bool hadResult = false;
 
 				do {
-					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &callFrame.variables, name, (FunkObject**) &result);
+					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &currentFrame->variables, name, (FunkObject**) &result);
 
 					if (currentFrame == NULL) {
 						break;
@@ -731,7 +731,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 				bool hadResult = false;
 
 				do {
-					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &callFrame.variables, name, (FunkObject**) &result);
+					hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &currentFrame->variables, name, (FunkObject**) &result);
 
 					if (currentFrame == NULL) {
 						break;
@@ -801,7 +801,52 @@ void funk_set_global(FunkVm* vm, const char* name, FunkFunction* function) {
 	funk_table_set(vm, &vm->globals, funk_create_string(vm, name, strlen(name)), (FunkObject*) function);
 }
 
+FunkFunction* funk_get_global(FunkVm* vm, const char* name) {
+	FunkFunction* result = NULL;
+	funk_table_get(&vm->globals, funk_create_string(vm, name, strlen(name)), (FunkObject**) &result);
+
+	return result;
+}
+
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn) {
 	FunkString* name_string = funk_create_string(vm, name, strlen(name));
 	funk_table_set(vm, &vm->globals, name_string, (FunkObject*) funk_create_native_function(vm, name_string, fn));
+}
+
+void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function) {
+	if (vm->callFrame == NULL) {
+		funk_set_global(vm, name, function);
+		return;
+	}
+
+	FunkString* name_string = funk_create_string(vm, name, strlen(name));
+	funk_table_set(vm, &vm->callFrame->variables, name_string, (FunkObject*) function);
+}
+
+FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {
+	if (vm->callFrame == NULL) {
+		return funk_get_global(vm, name);
+	}
+
+	FunkCallFrame* currentFrame = vm->callFrame;
+	FunkString* name_string = funk_create_string(vm, name, strlen(name));
+	FunkFunction* result = NULL;
+
+	bool hadResult = false;
+
+	do {
+		hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &currentFrame->variables, name_string, (FunkObject**) &result);
+
+		if (currentFrame == NULL) {
+			break;
+		}
+
+		currentFrame = currentFrame->previous;
+	} while (!hadResult);
+
+	return result;
+}
+
+void funk_error(FunkVm* vm, const char* error) {
+	vm->errorFn(vm, error);
 }

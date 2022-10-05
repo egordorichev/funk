@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 
 #define UNREACHABLE assert(false);
 #define FUNK_GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -192,7 +193,18 @@ FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 
 #define FUNK_NATIVE_FUNCTION_DEFINITION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t argCount)
 #define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, name)
+#define FUNK_RETURN_STRING(string) (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, string, strlen(string)))
+#define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
+#define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
+#define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
+
+void funk_set_global(FunkVm* vm, const char* name, FunkFunction* function);
+FunkFunction* funk_get_global(FunkVm* vm, const char* name);
+void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function);
+FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
+
+void funk_error(FunkVm* vm, const char* error);
 
 #endif

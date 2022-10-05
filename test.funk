@@ -1,9 +1,2 @@
-function test(z) {
-	return z()
-}
-
-function what() {
-	return hello
-}
-
-print(test(what))
+set(local, a)
+print(local)
