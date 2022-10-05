@@ -246,14 +246,15 @@ FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
 
 void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction) {
 	if (function->codeAllocated < function->codeLength + 1) {
-		uint16_t new_size = FUNK_GROW_CAPACITY(function->codeAllocated);
-		uint8_t* new_chunk = (uint8_t*) vm->allocFn(sizeof(uint8_t) * new_size);
+		uint16_t newSize = FUNK_GROW_CAPACITY(function->codeAllocated);
+		size_t totalSize = sizeof(uint8_t) * newSize;
+		uint8_t* newChunk = (uint8_t*) vm->allocFn(totalSize);
 
-		memcpy((void*) new_chunk, (void*) function->code, function->codeAllocated);
+		memcpy((void*) newChunk, (void*) function->code, sizeof(uint8_t) * function->codeAllocated);
 		vm->freeFn((void*) function->code);
 
-		function->code = new_chunk;
-		function->codeAllocated = new_size;
+		function->code = newChunk;
+		function->codeAllocated = newSize;
 	}
 
 	function->code[function->codeLength++] = instruction;
@@ -267,14 +268,14 @@ uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject*
 	}
 
 	if (function->constantsAllocated < function->constantsLength + 1) {
-		uint16_t new_size = FUNK_GROW_CAPACITY(function->constantsAllocated);
-		FunkObject** new_constants = (FunkObject**) vm->allocFn(sizeof(FunkObject*) * new_size);
+		uint16_t newSize = FUNK_GROW_CAPACITY(function->constantsAllocated);
+		FunkObject** newConstants = (FunkObject**) vm->allocFn(sizeof(FunkObject*) * newSize);
 
-		memcpy((void*) new_constants, (void*) function->constants, function->constantsAllocated);
+		memcpy((void*) newConstants, (void*) function->constants, sizeof(FunkObject*) * function->constantsAllocated);
 		vm->freeFn((void*) function->constants);
 
-		function->constants = new_constants;
-		function->constantsAllocated = new_size;
+		function->constants = newConstants;
+		function->constantsAllocated = newSize;
 	}
 
 	function->constants[function->constantsLength++] = (FunkObject*) constant;
@@ -661,10 +662,6 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 		return nativeFunction->fn(vm, NULL, 0);
 	}
 
-	#ifdef FUNK_TRACE_STACK
-		printf("\n== %s ==\n", function->name->chars);
-	#endif
-
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
 
 	register uint8_t* ip = fn->code;
@@ -683,6 +680,15 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 	}
 
 	vm->callFrame = &callFrame;
+
+	#ifdef FUNK_TRACE_STACK
+		printf("\n=+ %s +=\n", function->name->chars);
+
+		for (uint16_t i = 0; i < fn->constantsLength; i++) {
+			FunkObject* object = fn->constants[i];
+			printf("%i: %s\n", i, object->type == FUNK_OBJECT_STRING ? ((FunkString*) object)->chars : funk_to_string(object));
+		}
+	#endif
 
 	#define READ_UINT8() (*ip++)
 	#define READ_UINT16() (ip += 2, (uint16_t) ((ip[-2] << 8) | ip[-1]))
@@ -855,8 +861,6 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 	#undef READ_UINT16
 	#undef PUSH
 	#undef POP
-
-	return NULL;
 }
 
 FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string) {
@@ -940,6 +944,10 @@ bool funk_is_true(FunkFunction* function) {
 }
 
 uint32_t parse_roman_numeral(const char* string, uint16_t length) {
+	if (memcmp(string, "NULLA", length) == 0) {
+		return 0;
+	}
+
 	uint32_t value = 0;
 
 	for (uint16_t i = 0; i < length; i++) {
@@ -988,7 +996,7 @@ uint16_t calculate_number_of_places(uint32_t n) {
 	return r;
 }
 
-double funk_to_number(FunkVm* vm, FunkFunction* function) {
+double funk_to_number(FunkFunction* function) {
 	const char* string = function->name->chars;
 	uint16_t length = function->name->length;
 	bool negative = false;

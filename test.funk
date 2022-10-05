@@ -1,13 +1,5 @@
-/*printNumber(-XI)
+printNumber(-I)
 printNumber(I.I)
 
 print(substring(hello, I, II)) // el
-print(substring(hello, NULLA)) // h*/
-
-function a(z) {
-	z()
-}
-
-a({
-	print(hi)
-})
+print(substring(hello, NULLA)) // h

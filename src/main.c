@@ -24,6 +24,7 @@ const char* read_file(const char* path) {
 }
 
 void print_error(FunkVm* vm, const char* error) {
+	// todo: stacktrace
 	fprintf(stderr, "%s\n", error);
 }
 

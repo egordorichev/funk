@@ -4,7 +4,7 @@
 #include <math.h>
 
 FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
-	FUNK_RETURN_STRING("nulla");
+	FUNK_RETURN_STRING("NULLA");
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(print) {
@@ -17,7 +17,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(print) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
 	for (uint8_t i = 0; i < argCount; i++) {
-		printf("%.6g\n", funk_to_number(vm, args[i]));
+		printf("%.6g\n", funk_to_number(args[i]));
 	}
 
 	return NULL;
@@ -98,8 +98,8 @@ FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 
 	FunkFunction* client = args[0];
 
-	uint16_t from = (uint16_t) fmax(0, funk_to_number(vm, args[1]));
-	uint16_t length = argCount > 1 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(vm, args[2])) : 1;
+	uint16_t from = (uint16_t) fmax(0, funk_to_number(args[1]));
+	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(args[2])) : 1;
 
 	if (length < 1) {
 		FUNK_RETURN_STRING("");

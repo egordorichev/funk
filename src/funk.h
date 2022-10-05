@@ -199,8 +199,8 @@ FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
 #define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
 #define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
-#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != count) { funk_error(vm, "Expected 2 arguments"); return NULL; }
-#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < count) { funk_error(vm, "Expected 2 arguments"); return NULL; }
+#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected 2 arguments"); return NULL; }
+#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected 2 arguments"); return NULL; }
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
 
@@ -211,6 +211,8 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
 
 void funk_error(FunkVm* vm, const char* error);
 bool funk_is_true(FunkFunction* function);
-double funk_to_number(FunkVm* vm, FunkFunction* function);
+double funk_to_number(FunkFunction* function);
+
+// todo: number to string
 
 #endif

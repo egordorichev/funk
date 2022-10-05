@@ -10,6 +10,10 @@ A language with the only data type being a function!
 * exit compilation upon error
 * space multiplication
 * char(byte)
+* gc
+* docs
+* tests?
+* check all todos
 
 ### Possible future improvements
 
