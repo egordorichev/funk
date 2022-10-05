@@ -127,6 +127,12 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 		case '{': return make_token(scanner, FUNK_TOKEN_LEFT_BRACE);
 		case '}': return make_token(scanner, FUNK_TOKEN_RIGHT_BRACE);
 		case ',': return make_token(scanner, FUNK_TOKEN_COMMA);
+		case '=': {
+			if (peek_char(scanner) == '>') {
+				advance_char(scanner);
+				return make_token(scanner, FUNK_TOKEN_ARROW);
+			}
+		}
 
 		default: return make_token(scanner, FUNK_TOKEN_EOF);
 	}
@@ -334,10 +340,67 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 	funk_write_instruction(compiler->vm, compiler->function, (uint8_t) (byte & 0xff));
 }
 
+static void compile_expression(FunkCompiler* compiler);
+
+static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, bool lambda) {
+	FunkVm* vm = compiler->vm;
+	FunkBasicFunction* oldFunction = compiler->function;
+
+	compiler->function = funk_create_basic_function(vm,  name);
+	consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
+
+	if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
+		FunkString* argumentNames[256];
+
+		do {
+			consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
+			argumentNames[compiler->function->argumentCount++] = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
+		} while (match_token(compiler, FUNK_TOKEN_COMMA));
+
+		size_t size = sizeof(FunkString*) * compiler->function->argumentCount;
+		compiler->function->argumentNames = (FunkString**) vm->allocFn(size);
+
+		memcpy((void*) compiler->function->argumentNames, argumentNames, size);
+
+		consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
+	}
+
+	if (lambda) {
+		consume_token(compiler, FUNK_TOKEN_ARROW, "Expected '=>' after function arguments");
+	}
+
+	consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
+
+	while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
+		compile_expression(compiler);
+	}
+
+	write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
+	write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+	FunkObject* newFunction = (FunkObject*) compiler->function;
+	compiler->function = oldFunction;
+
+	return (FunkFunction*) newFunction;
+}
+
 static void compile_expression(FunkCompiler* compiler) {
 	if (match_token(compiler, FUNK_TOKEN_RETURN)) {
 		compile_expression(compiler);
 		write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
+
+		return;
+	}
+
+	if (compiler->current.type == FUNK_TOKEN_LEFT_PAREN) {
+		char buffer[256];
+		sprintf(buffer, "lamba %s %i", compiler->function->parent.name->chars, compiler->previous.line);
+
+		FunkString* name = funk_create_string(compiler->vm, buffer, strlen(buffer));
+		FunkFunction* lamba = compile_function(compiler, name, true);
+
+		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_CONSTANT);
+		write_uint16_t(compiler, funk_add_constant(compiler->vm, compiler->function, (FunkObject*) lamba));
 
 		return;
 	}
@@ -372,43 +435,12 @@ static void compile_declaration(FunkCompiler* compiler) {
 		consume_token(compiler, FUNK_TOKEN_NAME, "Expected function name");
 
 		FunkVm* vm = compiler->vm;
-		FunkBasicFunction* oldFunction = compiler->function;
 		FunkString* name = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
 
-		compiler->function = funk_create_basic_function(vm,  name);
-
-		consume_token(compiler, FUNK_TOKEN_LEFT_PAREN, "Expected '(' after function name");
-
-		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
-			FunkString* argumentNames[256];
-
-			do {
-				consume_token(compiler, FUNK_TOKEN_NAME, "Expected argument name");
-				argumentNames[compiler->function->argumentCount++] = funk_create_string(vm, compiler->previous.start, compiler->previous.length);
-			} while (match_token(compiler, FUNK_TOKEN_COMMA));
-
-			size_t size = sizeof(FunkString*) * compiler->function->argumentCount;
-			compiler->function->argumentNames = (FunkString**) vm->allocFn(size);
-
-			memcpy((void*) compiler->function->argumentNames, argumentNames, size);
-
-			consume_token(compiler, FUNK_TOKEN_RIGHT_PAREN, "Expected ')' after function arguments");
-		}
-
-		consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
-
-		while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
-			compile_expression(compiler);
-		}
-
-		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
-		write_uint8_t(compiler, FUNK_INSTRUCTION_RETURN);
-
-		FunkObject* newFunction = (FunkObject*) compiler->function;
-		compiler->function = oldFunction;
+		FunkFunction* newFunction = compile_function(compiler, name, false);
 
 		write_uint8_t(compiler, FUNK_INSTRUCTION_DEFINE);
-		write_uint16_t(compiler, funk_add_constant(vm, oldFunction, newFunction));
+		write_uint16_t(compiler, funk_add_constant(vm, compiler->function, newFunction));
 
 		return;
 	}
@@ -770,6 +802,11 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 			case FUNK_INSTRUCTION_PUSH_NULL: {
 				PUSH(NULL);
+				break;
+			}
+
+			case FUNK_INSTRUCTION_PUSH_CONSTANT: {
+				PUSH((FunkFunction*) READ_CONSTANT());
 				break;
 			}
 

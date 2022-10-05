@@ -1,2 +1,7 @@
-set(local, a)
-print(local)
+function test(a) {
+	a(b, c)
+}
+
+test((z, e) => {
+	print(z, e)
+})
