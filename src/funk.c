@@ -93,6 +93,10 @@ static bool is_alpha(char c) {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '.' || c == '-';
 }
 
+static bool is_digit(char c) {
+	return c >= '0' && c <= '9';
+}
+
 static FunkTokenType decide_token_type(FunkScanner* scanner) {
 	uint16_t length = (uint16_t) (scanner->current - scanner->start);
 
@@ -116,7 +120,7 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 	char c = advance_char(scanner);
 
 	if (is_alpha(c)) {
-		while (is_alpha(peek_char(scanner))) {
+		while (is_alpha(peek_char(scanner)) || is_digit(peek_char(scanner))) {
 			advance_char(scanner);
 		}
 
@@ -209,12 +213,14 @@ FunkString* funk_create_string(sFunkVm* vm, const char* chars, uint16_t length) 
 
 	FunkString* string = (FunkString*) allocate_object(vm, sizeof(FunkString));
 
+	char* buffer = vm->allocFn(length + 1);
+	memcpy((void*) buffer, chars, length);
+	buffer[length] = '\0';
+
 	string->object.type = FUNK_OBJECT_STRING;
-	string->chars = (const char*) vm->allocFn(length);
+	string->chars = (const char*) buffer;
 	string->length = length;
 	string->hash = hash;
-
-	memcpy((void*) string->chars, chars, length);
 
 	funk_table_set(vm, &vm->strings, string, (FunkObject*) string);
 
@@ -242,6 +248,11 @@ FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name) {
 	function->constantsLength = 0;
 
 	return function;
+}
+
+FunkBasicFunction* funk_create_empty_function(sFunkVm* vm, const char* name) {
+	FunkString* nameString = funk_create_string(vm, name, strlen(name));
+	return funk_create_basic_function(vm, nameString);
 }
 
 void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction) {
@@ -407,13 +418,13 @@ static void compile_expression(FunkCompiler* compiler) {
 
 	if (compiler->current.type == FUNK_TOKEN_LEFT_PAREN || compiler->current.type == FUNK_TOKEN_LEFT_BRACE) {
 		char buffer[256];
-		sprintf(buffer, "lamba %s %i", compiler->function->parent.name->chars, compiler->previous.line);
+		sprintf(buffer, "lambda %s %u", compiler->function->parent.name->chars, compiler->previous.line);
 
 		FunkString* name = funk_create_string(compiler->vm, buffer, strlen(buffer));
-		FunkFunction* lamba = compile_function(compiler, name, true);
+		FunkFunction* lambda = compile_function(compiler, name, true);
 
 		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_CONSTANT);
-		write_uint16_t(compiler, funk_add_constant(compiler->vm, compiler->function, (FunkObject*) lamba));
+		write_uint16_t(compiler, funk_add_constant(compiler->vm, compiler->function, (FunkObject*) lambda));
 
 		return;
 	}
@@ -652,17 +663,21 @@ void funk_free_vm(FunkVm* vm) {
 	vm->freeFn((void*) vm);
 }
 
-FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
+FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argCount) {
 	if (function == NULL) {
 		return NULL;
 	}
 
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 		FunkNativeFunction* nativeFunction = (FunkNativeFunction*) function;
-		return nativeFunction->fn(vm, NULL, 0);
+		return nativeFunction->fn(vm, vm->stackTop, argCount);
 	}
 
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
+
+	if (fn->codeLength == 0) {
+		return fn;
+	}
 
 	register uint8_t* ip = fn->code;
 	FunkObject** constants = fn->constants;
@@ -750,7 +765,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 						vm->stackTop[i + 1] = NULL;
 					}
 
-					result = funk_run_function(vm, callee);
+					result = funk_run_function(vm, callee, argumentCount);
 				}
 
 				#ifdef FUNK_TRACE_STACK
@@ -865,7 +880,20 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string) {
 	FunkFunction* function = funk_compile_string(vm, name, string);
-	return funk_run_function(vm, function);
+	return funk_run_function(vm, function, 0);
+}
+
+FunkFunction* funk_run_function_arged(FunkVm* vm, FunkFunction* function, FunkFunction** args, uint8_t argCount) {
+	for (uint8_t i = 0; i < argCount; i++) {
+		vm->stackTop[i + 1] = args[i];
+	}
+
+	return funk_run_function(vm, function, argCount);
+}
+
+FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* string, FunkFunction** args, uint8_t argCount) {
+	FunkFunction* function = funk_compile_string(vm, name, string);
+	return funk_run_function_arged(vm, function, args, argCount);
 }
 
 void funk_set_global(FunkVm* vm, const char* name, FunkFunction* function) {
@@ -880,8 +908,8 @@ FunkFunction* funk_get_global(FunkVm* vm, const char* name) {
 }
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn) {
-	FunkString* name_string = funk_create_string(vm, name, strlen(name));
-	funk_table_set(vm, &vm->globals, name_string, (FunkObject*) funk_create_native_function(vm, name_string, fn));
+	FunkString* nameString = funk_create_string(vm, name, strlen(name));
+	funk_table_set(vm, &vm->globals, nameString, (FunkObject*) funk_create_native_function(vm, nameString, fn));
 }
 
 void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function) {
@@ -891,19 +919,19 @@ void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function) {
 	}
 
 	FunkCallFrame* currentFrame = vm->callFrame;
-	FunkString* name_string = funk_create_string(vm, name, strlen(name));
+	FunkString* nameString = funk_create_string(vm, name, strlen(name));
 	FunkFunction* result = NULL;
 
 	do {
 		FunkTable* table = currentFrame == NULL ? &vm->globals : &currentFrame->variables;
 
-		if (funk_table_get(table, name_string, (FunkObject**) &result)) {
-			funk_table_set(vm, table, name_string, (FunkObject*) function);
+		if (funk_table_get(table, nameString, (FunkObject**) &result)) {
+			funk_table_set(vm, table, nameString, (FunkObject*) function);
 			return;
 		}
 
 		if (currentFrame == NULL) {
-			funk_table_set(vm, &vm->callFrame->variables, name_string, (FunkObject*) function);
+			funk_table_set(vm, &vm->callFrame->variables, nameString, (FunkObject*) function);
 			break;
 		}
 
@@ -917,13 +945,13 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {
 	}
 
 	FunkCallFrame* currentFrame = vm->callFrame;
-	FunkString* name_string = funk_create_string(vm, name, strlen(name));
+	FunkString* nameString = funk_create_string(vm, name, strlen(name));
 	FunkFunction* result = NULL;
 
 	bool hadResult = false;
 
 	do {
-		hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &currentFrame->variables, name_string, (FunkObject**) &result);
+		hadResult = funk_table_get(currentFrame == NULL ? &vm->globals : &currentFrame->variables, nameString, (FunkObject**) &result);
 
 		if (currentFrame == NULL) {
 			break;
@@ -939,11 +967,19 @@ void funk_error(FunkVm* vm, const char* error) {
 	vm->errorFn(vm, error);
 }
 
-bool funk_is_true(FunkFunction* function) {
+bool funk_function_has_code(FunkFunction* function) {
+	return function->object.type == FUNK_OBJECT_NATIVE_FUNCTION ? true : ((FunkBasicFunction*) function)->codeLength > 0;
+}
+
+bool funk_is_true(FunkVm* vm, FunkFunction* function) {
+	if (funk_function_has_code(function)) {
+		function = funk_run_function(vm, function, 0);
+	}
+
 	return strcmp(function->name->chars, "true") == 0;
 }
 
-uint32_t parse_roman_numeral(const char* string, uint16_t length) {
+static uint32_t parse_roman_numeral(const char* string, uint16_t length) {
 	if (memcmp(string, "NULLA", length) == 0) {
 		return 0;
 	}
@@ -985,7 +1021,7 @@ uint32_t parse_roman_numeral(const char* string, uint16_t length) {
 	return value;
 }
 
-uint16_t calculate_number_of_places(uint32_t n) {
+static uint16_t calculate_number_of_places(uint32_t n) {
 	uint16_t r = 1;
 
 	while (n > 9) {
@@ -996,7 +1032,29 @@ uint16_t calculate_number_of_places(uint32_t n) {
 	return r;
 }
 
-double funk_to_number(FunkFunction* function) {
+static uint16_t calculate_number_of_places_after_dot(double n) {
+	uint16_t places = 0;
+
+	while (true) {
+		n *= 10;
+
+		if ((int) fmod(n, 10) == 0 && (int) fmod(n * 10, 10) == 0) {
+			return places;
+		}
+
+		places++;
+
+		if (places >= 5) {
+			return places;
+		}
+	}
+}
+
+double funk_to_number(FunkVm* vm, FunkFunction* function) {
+	if (funk_function_has_code(function)) {
+		function = funk_run_function(vm, function, 0);
+	}
+
 	const char* string = function->name->chars;
 	uint16_t length = function->name->length;
 	bool negative = false;
@@ -1018,4 +1076,98 @@ double funk_to_number(FunkFunction* function) {
 	}
 
 	return (value + parse_roman_numeral(string, length)) * (negative ? -1 : 1);
+}
+
+static FunkString* roman_to_string(FunkVm* vm, uint32_t value) {
+	uint32_t number = value;
+	uint16_t index = 0;
+
+	char buffer[255];
+
+	while (number != 0) {
+		if (number >= 1000) {
+			buffer[index++] = 'M';
+			number -= 1000;
+		} else if (number >= 900) {
+			memcpy((void*) (buffer + index), "CM", 2);
+
+			index += 2;
+			number -= 900;
+		} else if (number >= 500) {
+			buffer[index++] = 'D';
+			number -= 500;
+		} else if (number >= 400) {
+			memcpy((void*) (buffer + index), "CD", 2);
+
+			index += 2;
+			number -= 400;
+		} else if (number >= 100) {
+			buffer[index++] = 'C';
+			number -= 100;
+		} else if (number >= 90) {memcpy((void*) (buffer + index), "XC", 2);
+
+			index += 2;
+			number -= 90;
+		} else if (number >= 50) {
+			buffer[index++] = 'L';
+			number -= 50;
+		} else if (number >= 40) {memcpy((void*) (buffer + index), "XL", 2);
+
+			index += 2;
+			number -= 40;
+		} else if (number >= 10) {
+			buffer[index++] = 'X';
+			number -= 10;
+		} else if (number >= 9) {memcpy((void*) (buffer + index), "IX", 2);
+
+			index += 2;
+			number -= 9;
+		} else if (number >= 5) {
+			buffer[index++] = 'V';
+			number -= 5;
+		} else if (number >= 4) {memcpy((void*) (buffer + index), "IV", 2);
+
+			index += 2;
+			number -= 4;
+		} else {
+			buffer[index++] = 'I';
+			number -= 1;
+		}
+	}
+
+	return funk_create_string(vm, buffer, index);
+}
+
+FunkFunction* funk_number_to_string(FunkVm* vm, double number) {
+	bool negative = number < 0;
+	number = fabs(number);
+
+	uint32_t whole = floor(number);
+	double fraction = number - whole;
+	FunkString* fractionString = fraction > 0 ? roman_to_string(vm, (uint32_t) (fraction * pow(10, calculate_number_of_places_after_dot(fraction)))) : NULL;
+
+	FunkString* digitsString = roman_to_string(vm, whole);
+	uint16_t length = digitsString->length + (uint16_t) negative;
+
+	if (fractionString != NULL) {
+		length += fractionString->length + 1;
+	}
+
+	char buffer[length + 1];
+	uint16_t index = 0;
+
+	if (negative) {
+		buffer[0] = '-';
+		index++;
+	}
+
+	memcpy((void*) (buffer + index), digitsString->chars, digitsString->length);
+
+	if (fractionString != NULL) {
+		buffer[index++] = '.';
+		memcpy((void*) (buffer + index), fractionString->chars, fractionString->length);
+	}
+
+	buffer[length] = '\0';
+	return (FunkFunction*) funk_create_empty_function(vm, buffer);
 }

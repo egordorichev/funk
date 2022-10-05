@@ -4,16 +4,34 @@ A language with the only data type being a function!
 
 ### Todo before release
 
-* roman numbers
 * For
-* std
+* std {
+    + modules
+    + file reading
+    + cli input
+    + length(str)
+    + char(byte)
+}
+
+* arrays
+* maps
+* count places after decimal point
 * exit compilation upon error
 * space multiplication
-* char(byte)
 * gc
 * docs
 * tests?
 * check all todos
+* command line arguments
+
+### Bugs
+
+* Lambda name has A after the line in it for some reason
+
+### Demos
+
+* BF compiler
+* fractal
 
 ### Possible future improvements
 

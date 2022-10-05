@@ -17,7 +17,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(print) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
 	for (uint8_t i = 0; i < argCount; i++) {
-		printf("%.6g\n", funk_to_number(args[i]));
+		printf("%.6g\n", funk_to_number(vm, args[i]));
 	}
 
 	return NULL;
@@ -42,16 +42,16 @@ FUNK_NATIVE_FUNCTION_DEFINITION(notEqual) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(not) {
 	FUNK_ENSURE_ARG_COUNT(1);
-	FUNK_RETURN_BOOL(!funk_is_true(args[0]));
+	FUNK_RETURN_BOOL(!funk_is_true(vm, args[0]));
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(_if) {
 	FUNK_ENSURE_MIN_ARG_COUNT(2);
 
-	if (funk_is_true(args[0])) {
-		return funk_run_function(vm, args[1]);
+	if (funk_is_true(vm, args[0])) {
+		return funk_run_function(vm, args[1], 0);
 	} else if (argCount > 2) {
-		return funk_run_function(vm, args[2]);
+		return funk_run_function(vm, args[2], 0);
 	}
 
 	return NULL;
@@ -60,8 +60,40 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_if) {
 FUNK_NATIVE_FUNCTION_DEFINITION(_while) {
 	FUNK_ENSURE_ARG_COUNT(2);
 
-	while (funk_is_true(args[0])) {
-		funk_run_function(vm, args[1]);
+	while (funk_is_true(vm, args[0])) {
+		funk_run_function(vm, args[1], 0);
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+
+	if (argCount == 2) {
+		FunkString* string = args[0]->name;
+		char buffer[2] = " \0";
+
+		for (uint16_t i = 0; i < string->length; i++) {
+			buffer[0] = string->chars[i];
+
+			FunkFunction* function = (FunkFunction*) funk_create_empty_function(vm, buffer);
+			funk_run_function_arged(vm, args[1], &function, 1);
+		}
+
+		return NULL;
+	}
+
+	FunkFunction* to = args[1];
+	double from = funk_to_number(vm, args[0]);
+	bool increment = from < funk_to_number(vm, to);
+
+	for (double i = funk_to_number(vm, args[0]);
+			increment == (i < funk_to_number(vm, to));
+			i += (increment ? 1 : -1)) {
+
+		FunkFunction* indexFunction = funk_number_to_string(vm, i);
+		funk_run_function_arged(vm, args[2], &indexFunction, 1);
 	}
 
 	return NULL;
@@ -98,8 +130,8 @@ FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 
 	FunkFunction* client = args[0];
 
-	uint16_t from = (uint16_t) fmax(0, funk_to_number(args[1]));
-	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(args[2])) : 1;
+	uint16_t from = (uint16_t) fmax(0, funk_to_number(vm, args[1]));
+	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(vm, args[2])) : 1;
 
 	if (length < 1) {
 		FUNK_RETURN_STRING("");
@@ -111,6 +143,46 @@ FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 	string[length] = '\0';
 
 	FUNK_RETURN_STRING(string);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(add) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) + funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(subtract) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) - funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(multiply) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) * funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(divide) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) / funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(greater) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) > funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(greaterEqual) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) >= funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(less) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) < funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
 }
 
 void funk_open_std(FunkVm* vm) {
@@ -125,8 +197,18 @@ void funk_open_std(FunkVm* vm) {
 
 	FUNK_DEFINE_FUNCTION("if", _if);
 	FUNK_DEFINE_FUNCTION("while", _while);
+	FUNK_DEFINE_FUNCTION("for", _for);
 
 	FUNK_DEFINE_FUNCTION("space", space);
 	FUNK_DEFINE_FUNCTION("join", join);
 	FUNK_DEFINE_FUNCTION("substring", substring);
+
+	FUNK_DEFINE_FUNCTION("add", add);
+	FUNK_DEFINE_FUNCTION("subtract", subtract);
+	FUNK_DEFINE_FUNCTION("multiply", multiply);
+	FUNK_DEFINE_FUNCTION("divide", divide);
+	FUNK_DEFINE_FUNCTION("greater", greater);
+	FUNK_DEFINE_FUNCTION("greaterEqual", greaterEqual);
+	FUNK_DEFINE_FUNCTION("less", less);
+	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
 }

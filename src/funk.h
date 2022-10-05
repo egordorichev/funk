@@ -116,6 +116,7 @@ typedef struct FunkBasicFunction {
 } FunkBasicFunction;
 
 FunkBasicFunction* funk_create_basic_function(sFunkVm* vm, FunkString* name);
+FunkBasicFunction* funk_create_empty_function(sFunkVm* vm, const char* name);
 void funk_write_instruction(sFunkVm* vm, FunkBasicFunction* function, uint8_t instruction);
 uint16_t funk_add_constant(sFunkVm* vm, FunkBasicFunction* function, FunkObject* constant);
 
@@ -190,12 +191,16 @@ typedef struct sFunkVm {
 
 FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn);
 void funk_free_vm(FunkVm* vm);
-FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function);
+
+FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argCount);
 FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
+FunkFunction* funk_run_function_arged(FunkVm* vm, FunkFunction* function, FunkFunction** args, uint8_t argCount);
+FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* string, FunkFunction** args, uint8_t argCount);
 
 #define FUNK_NATIVE_FUNCTION_DEFINITION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t argCount)
 #define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, name)
 #define FUNK_RETURN_STRING(string) return (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, string, strlen(string)))
+#define FUNK_RETURN_NUMBER(number) return funk_number_to_string(vm, (number))
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
 #define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
 #define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
@@ -210,9 +215,9 @@ void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function);
 FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
 
 void funk_error(FunkVm* vm, const char* error);
-bool funk_is_true(FunkFunction* function);
-double funk_to_number(FunkFunction* function);
-
-// todo: number to string
+bool funk_function_has_code(FunkFunction* function);
+bool funk_is_true(FunkVm* vm, FunkFunction* function);
+double funk_to_number(FunkVm* vm, FunkFunction* function);
+FunkFunction* funk_number_to_string(FunkVm* vm, double value);
 
 #endif

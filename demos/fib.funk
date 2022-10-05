@@ -1,7 +1,3 @@
-/*for(NULLA, X, (i) => {
-	print(i)
-})*/
-
 function fib(n) {
 	return if(
 		less(n, II),
@@ -10,4 +6,4 @@ function fib(n) {
 	)
 }
 
-printNumber(fib(X))
+printNumber(fib(X)) // 55
