@@ -425,7 +425,7 @@ static void compile_expression(FunkCompiler* compiler) {
 	write_uint8_t(compiler, isACall ? FUNK_INSTRUCTION_GET : FUNK_INSTRUCTION_GET_STRING);
 	write_uint16_t(compiler, name);
 
-	if (isACall) {
+	while (isACall) {
 		uint8_t argumentCount = 0;
 
 		if (!match_token(compiler, FUNK_TOKEN_RIGHT_PAREN)) {
@@ -439,6 +439,8 @@ static void compile_expression(FunkCompiler* compiler) {
 
 		write_uint8_t(compiler, FUNK_INSTRUCTION_CALL);
 		write_uint8_t(compiler, argumentCount);
+
+		isACall = match_token(compiler, FUNK_TOKEN_LEFT_PAREN);
 	}
 }
 
@@ -659,6 +661,10 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 		return nativeFunction->fn(vm, NULL, 0);
 	}
 
+	#ifdef FUNK_TRACE_STACK
+		printf("\n== %s ==\n", function->name->chars);
+	#endif
+
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
 
 	register uint8_t* ip = fn->code;
@@ -700,11 +706,13 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 		switch (*ip++) {
 			case FUNK_INSTRUCTION_RETURN: {
+				FunkFunction* value = POP();
+
 				vm->callFrame = callFrame.previous;
 				vm->stackTop = initialStackTop;
 
 				funk_free_table(vm, &callFrame.variables);
-				return POP();
+				return value;
 			}
 
 			case FUNK_INSTRUCTION_CALL: {
@@ -738,6 +746,10 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function) {
 
 					result = funk_run_function(vm, callee);
 				}
+
+				#ifdef FUNK_TRACE_STACK
+					printf("\n== %s ==\n", function->name->chars);
+				#endif
 
 				vm->stackTop = stackTop;
 				PUSH(result);

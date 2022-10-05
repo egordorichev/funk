@@ -1,7 +1,9 @@
-print(not(test))
+function a() {
+	function b() {
+		print(test)
+	}
 
-while(() => not(test), () => {
-	print(sike)
-	set(test, true)
-	// print(not(test))
-})
+	return b
+}
+
+a()()

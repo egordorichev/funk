@@ -5,7 +5,6 @@ A language with the only data type being a function!
 ### Todo before release
 
 * roman numbers
-* While
 * For
 * std
 * exit compilation upon error
@@ -15,3 +14,4 @@ A language with the only data type being a function!
 * Using custom callframe stack instead of the C one
 * goto jumping in the instruction loop
 * single arg lambdas `a => print(a)`
+* Exception system
