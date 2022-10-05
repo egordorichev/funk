@@ -1,1 +1,5 @@
-print(not(equal(a, b)))
+if (false, () => {
+	print(yes)
+}, () => {
+	print(no)
+})

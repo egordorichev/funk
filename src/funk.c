@@ -887,3 +887,7 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {
 void funk_error(FunkVm* vm, const char* error) {
 	vm->errorFn(vm, error);
 }
+
+bool funk_is_true(FunkFunction* function) {
+	return strcmp(function->name->chars, "true") == 0;
+}

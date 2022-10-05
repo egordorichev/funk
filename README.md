@@ -4,7 +4,7 @@ A language with the only data type being a function!
 
 ### Todo before release
 
-* If
+* roman numbers
 * While
 * For
 * std
