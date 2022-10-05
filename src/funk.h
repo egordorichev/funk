@@ -195,10 +195,11 @@ FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 
 #define FUNK_NATIVE_FUNCTION_DEFINITION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t argCount)
 #define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, name)
-#define FUNK_RETURN_STRING(string) (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, string, strlen(string)))
+#define FUNK_RETURN_STRING(string) return (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, string, strlen(string)))
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
 #define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
 #define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
+#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != count) { funk_error(vm, "Expected 2 arguments"); return NULL; }
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
 

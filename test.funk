@@ -1,7 +1,1 @@
-function test(a) {
-	a(b, c)
-}
-
-test((z, e) => {
-	print(z, e)
-})
+print(not(equal(a, b)))
