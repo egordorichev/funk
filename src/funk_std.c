@@ -59,7 +59,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(arrayCallback) {
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(array) {
-	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$arrayData", 10), arrayCallback);
+	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$arrayData", 10),(FunkNativeFn) arrayCallback);
 	FunkArrayData* data = (FunkArrayData*) vm->allocFn(sizeof(FunkArrayData));
 
 	data->length = argCount;
@@ -111,15 +111,103 @@ FUNK_NATIVE_FUNCTION_DEFINITION(push) {
 	return NULL;
 }
 
-FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
+typedef struct FunkMapData {
+	FunkTable table;
+} FunkMapData;
+
+static FunkMapData* extract_map_data(FunkVm* vm, FunkFunction* function) {
+	if (function->object.type != FUNK_OBJECT_NATIVE_FUNCTION) {
+		funk_error(vm, "Expected an array as argument");
+		return NULL;
+	}
+
+	return (FunkMapData*) ((FunkNativeFunction*) function)->data;
+}
+
+static void cleanup_map_data(FunkVm* vm, FunkNativeFunction* function) {
+	if (function->data != NULL) {
+		FunkMapData* data = extract_map_data(vm, (FunkFunction *) function);
+
+		funk_free_table(vm, &data->table);
+		vm->freeFn(function->data);
+
+		function->data = NULL;
+	}
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(mapCallback) {
+	FunkMapData* data = extract_map_data(vm, (FunkFunction *) self);
+
+	if (argCount == 1) {
+		if (funk_function_has_code(args[0])) {
+			for (int32_t i = 0; i <= data->table.capacity; i++) {
+				FunkTableEntry* entry = &data->table.entries[i];
+				if (entry->key != NULL) {
+					FunkFunction* buffer[2] = {
+						(FunkFunction*) funk_create_basic_function(vm, entry->key), // Bye-bye efficiency!
+						(FunkFunction *) entry->value
+					};
+
+					funk_run_function_arged(vm, args[0], (FunkFunction **) &buffer, 2);
+				}
+			}
+
+			return NULL;
+		}
+
+		FunkFunction* result = NULL;
+		funk_table_get(&data->table, args[0]->name, (FunkObject **) &result);
+
+		return result;
+	}
+
 	FUNK_ENSURE_ARG_COUNT(2);
 
-	if (!is_array(args[0])) {
+	funk_table_set(vm, &data->table, args[0]->name, (FunkObject *) args[1]);
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(map) {
+	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$mapData", 10),(FunkNativeFn) mapCallback);
+	FunkMapData* data = (FunkMapData*) vm->allocFn(sizeof(FunkMapData));
+
+	funk_init_table(&data->table);
+
+	if (argCount > 0) {
+		for (uint8_t i = 0; i < argCount; i += 2) {
+			if (i + 1 >= argCount) {
+				break;
+			}
+
+			funk_table_set(vm, &data->table, args[i]->name, (FunkObject *) args[i + 1]);
+		}
+	}
+
+	function->cleanupFn = cleanup_map_data;
+	function->data = (void*) data;
+
+	return (FunkFunction *) function;
+}
+
+static inline bool is_map(FunkFunction* argument) {
+	return argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_map_data;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
+	FUNK_ENSURE_ARG_COUNT(2);
+	FunkFunction* argument = args[0];
+
+	if (is_map(argument)) {
+		FunkMapData* data = extract_map_data(vm, argument);
+		funk_table_delete(&data->table, args[1]->name);
+
+		return NULL;
+	} else if (!is_array(argument)) {
 		funk_error(vm, "Expected an array as the first argument");
 		return NULL;
 	}
 
-	FunkArrayData* data = extract_array_data(vm, args[0]);
+	FunkArrayData* data = extract_array_data(vm, argument);
 	int32_t index = (int32_t) funk_to_number(vm, args[1]);
 
 	if (index < 0 || index >= data->length) {
@@ -233,6 +321,22 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
 			}
 
 			return NULL;
+		} else if (is_map(argument)) {
+			FunkMapData* data = extract_map_data(vm, argument);
+
+			for (int32_t i = 0; i <= data->table.capacity; i++) {
+				FunkTableEntry* entry = &data->table.entries[i];
+				if (entry->key != NULL) {
+					FunkFunction* buffer[2] = {
+						(FunkFunction*) funk_create_basic_function(vm, entry->key), // Bye-bye efficiency!
+						(FunkFunction *) entry->value
+					};
+
+					funk_run_function_arged(vm, args[1], (FunkFunction **) &buffer, 2);
+				}
+			}
+
+			return NULL;
 		}
 
 		FunkString* string = argument->name;
@@ -295,6 +399,9 @@ FUNK_NATIVE_FUNCTION_DEFINITION(length) {
 	if (is_array(argument)) {
 		FunkArrayData* data = extract_array_data(vm, argument);
 		FUNK_RETURN_NUMBER(data->length);
+	} else if (is_map(argument)) {
+		FunkMapData* data = extract_map_data(vm, argument);
+		FUNK_RETURN_NUMBER(data->table.count);
 	}
 
 	FUNK_RETURN_NUMBER(argument->name->length);
@@ -409,6 +516,7 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
 
 	FUNK_DEFINE_FUNCTION("array", array);
+	FUNK_DEFINE_FUNCTION("map", map);
 	FUNK_DEFINE_FUNCTION("push", push);
 	FUNK_DEFINE_FUNCTION("remove", _remove);
 }

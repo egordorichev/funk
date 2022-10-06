@@ -165,6 +165,7 @@ void funk_free_table(sFunkVm* vm, FunkTable* table);
 bool funk_table_set(sFunkVm* vm, FunkTable* table, FunkString* key, FunkObject* value);
 bool funk_table_get(FunkTable* table, FunkString* key, FunkObject** value);
 FunkString* funk_table_find_string(FunkTable* table, const char* chars, uint16_t length, uint32_t hash);
+bool funk_table_delete(FunkTable* table, FunkString* key);
 
 typedef void* (*FunkAllocFn)(size_t);
 typedef void (*FunkFreeFn)(void*);

@@ -636,6 +636,24 @@ FunkString* funk_table_find_string(FunkTable* table, const char* chars, uint16_t
 	}
 }
 
+bool funk_table_delete(FunkTable* table, FunkString* key) {
+	if (table->count == 0) {
+		return false;
+	}
+
+	FunkTableEntry* entry = find_entry(table->entries, table->capacity, key);
+
+	if (entry->key == NULL) {
+		return false;
+	}
+
+	entry->key = NULL;
+	entry->value = NULL;
+
+	return true;
+}
+
+
 FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn) {
 	FunkVm* vm = (FunkVm*) allocFn(sizeof(FunkVm));
 
