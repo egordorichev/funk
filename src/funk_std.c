@@ -270,6 +270,61 @@ static inline bool is_array(FunkFunction* argument) {
 	return argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_array_data;
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(push) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+
+	if (!is_array(args[0])) {
+		funk_error(vm, "Expected an array as the first argument");
+		return NULL;
+	}
+
+	FunkArrayData* data = extract_array_data(vm, args[0]);
+	uint16_t newLength = data->length + argCount - 1;
+
+	if (newLength > data->allocated) {
+		uint16_t newSize = FUNK_GROW_CAPACITY(data->allocated);
+		size_t totalSize = sizeof(FunkFunction*) * newSize;
+		FunkFunction** newData = (FunkFunction**) vm->allocFn(totalSize);
+
+		memcpy((void*) newData, (void*) data->data, sizeof(FunkFunction) * data->allocated);
+		vm->freeFn((void*) data->data);
+
+		data->data = newData;
+		data->allocated = newSize;
+	}
+
+	memcpy((void*) (data->data + data->length), args + 1, sizeof(FunkFunction*) * (argCount - 1));
+	data->length = newLength;
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
+	FUNK_ENSURE_ARG_COUNT(2);
+
+	if (!is_array(args[0])) {
+		funk_error(vm, "Expected an array as the first argument");
+		return NULL;
+	}
+
+	FunkArrayData* data = extract_array_data(vm, args[0]);
+	int32_t index = (int32_t) funk_to_number(vm, args[1]);
+
+	if (index < 0 || index >= data->length) {
+		return NULL;
+	}
+
+	if (index == data->length - 1) {
+		data->length--;
+		return NULL;
+	}
+
+	memcpy((void*) (data->data + index), data->data + index + 1, sizeof(FunkFunction*) * (data->length - index - 1));
+	data->length--;
+
+	return NULL;
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(length) {
 	FUNK_ENSURE_ARG_COUNT(1);
 	FunkFunction* argument = args[0];
@@ -342,4 +397,6 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
 
 	FUNK_DEFINE_FUNCTION("array", array);
+	FUNK_DEFINE_FUNCTION("push", push);
+	FUNK_DEFINE_FUNCTION("remove", _remove);
 }
