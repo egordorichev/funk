@@ -229,6 +229,19 @@ FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
 	FUNK_RETURN_STRING("NULLA");
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(variable) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	uint16_t length = args[0]->name->length + 1;
+	char string[length + 1];
+	uint16_t index = 0;
+
+	string[0] = '$';
+	memcpy((void*) (string + 1), args[0]->name->chars, args[0]->name->length);
+	string[length] = '\0';
+
+	FUNK_RETURN_STRING(string);
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(print) {
 	for (uint8_t i = 0; i < argCount; i++) {
 		printf("%s\n", funk_to_string(args[i]));
@@ -269,6 +282,12 @@ FUNK_NATIVE_FUNCTION_DEFINITION(set) {
 
 	return NULL;
 }
+
+FUNK_NATIVE_FUNCTION_DEFINITION(get) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	return funk_get_variable(vm, args[0]->name->chars);
+}
+
 
 FUNK_NATIVE_FUNCTION_DEFINITION(equal) {
 	FUNK_ENSURE_ARG_COUNT(2);
@@ -485,6 +504,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
 
 void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("NULLA", nulla);
+	FUNK_DEFINE_FUNCTION("variable", variable);
 
 	FUNK_DEFINE_FUNCTION("print", print);
 	FUNK_DEFINE_FUNCTION("printNumber", printNumber);
@@ -492,6 +512,7 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("readLine", readLine);
 
 	FUNK_DEFINE_FUNCTION("set", set);
+	FUNK_DEFINE_FUNCTION("get", get);
 	FUNK_DEFINE_FUNCTION("equal", equal);
 	FUNK_DEFINE_FUNCTION("notEqual", notEqual);
 	FUNK_DEFINE_FUNCTION("not", not);

@@ -1,9 +1,4 @@
-set(myMap, map(a, I, b, V, d, e))
-remove(myMap, d)
-
-for(myMap, (key, value) => {
-	print(join(key, space(), value))
-})
-
-print(length(myMap))
-print(myMap(a))
+set(variable(a), b)
+print(get(variable(a)))
+set(variable(a), d)
+print(get(variable(a)))
