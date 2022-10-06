@@ -4,194 +4,6 @@
 #include <math.h>
 #include <time.h>
 
-FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
-	FUNK_RETURN_STRING("NULLA");
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(print) {
-	for (uint8_t i = 0; i < argCount; i++) {
-		printf("%s\n", funk_to_string(args[i]));
-	}
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
-	for (uint8_t i = 0; i < argCount; i++) {
-		printf("%.6g\n", funk_to_number(vm, args[i]));
-	}
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(_clock) {
-	clock_t time = clock();
-	double inSeconds = (double) time / (double) CLOCKS_PER_SEC;
-
-	FUNK_RETURN_NUMBER(inSeconds);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
-	char* line = NULL;
-	size_t length = 0;
-
-	length = getline(&line, &length, stdin);
-	FunkString* string = funk_create_string(vm, line, length);
-
-	free(line);
-	return (FunkFunction *) funk_create_basic_function(vm, string);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(set) {
-	FUNK_ENSURE_ARG_COUNT(2);
-	funk_set_variable(vm, args[0]->name->chars, args[1]);
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(equal) {
-	FUNK_ENSURE_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(args[0]->name == args[1]->name);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(notEqual) {
-	FUNK_ENSURE_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(args[0]->name != args[1]->name);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(not) {
-	FUNK_ENSURE_ARG_COUNT(1);
-	FUNK_RETURN_BOOL(!funk_is_true(vm, args[0]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(_if) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-
-	if (funk_is_true(vm, args[0])) {
-		return funk_run_function(vm, args[1], 0);
-	} else if (argCount > 2) {
-		return funk_run_function(vm, args[2], 0);
-	}
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(_while) {
-	FUNK_ENSURE_ARG_COUNT(2);
-
-	while (funk_is_true(vm, args[0])) {
-		funk_run_function(vm, args[1], 0);
-	}
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-
-	if (argCount == 2) {
-		FunkString* string = args[0]->name;
-		char buffer[2] = " \0";
-
-		for (uint16_t i = 0; i < string->length; i++) {
-			buffer[0] = string->chars[i];
-
-			FunkFunction* function = (FunkFunction*) funk_create_empty_function(vm, buffer);
-			funk_run_function_arged(vm, args[1], &function, 1);
-		}
-
-		return NULL;
-	}
-
-	FunkFunction* to = args[1];
-	double from = funk_to_number(vm, args[0]);
-	bool increment = from < funk_to_number(vm, to);
-
-	for (double i = funk_to_number(vm, args[0]);
-			increment == (i < funk_to_number(vm, to));
-			i += (increment ? 1 : -1)) {
-
-		FunkFunction* indexFunction = funk_number_to_string(vm, i);
-		funk_run_function_arged(vm, args[2], &indexFunction, 1);
-	}
-
-	return NULL;
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(space) {
-	// TODO: optional argument for how many spaces
-	FUNK_RETURN_STRING(" ");
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-
-	FunkFunction* client = args[0];
-
-	uint16_t from = (uint16_t) fmax(0, funk_to_number(vm, args[1]));
-	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(vm, args[2])) : 1;
-
-	if (length < 1) {
-		FUNK_RETURN_STRING("");
-	}
-
-	char string[length + 1];
-
-	memcpy((void*) string, (void*) (client->name->chars + from), length);
-	string[length] = '\0';
-
-	FUNK_RETURN_STRING(string);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(_char) {
-	FUNK_ENSURE_ARG_COUNT(1);
-
-	uint8_t byte = (uint8_t) funk_to_number(vm, args[0]);
-	char buffer[2] = { (char) byte, '\0'};
-
-	FUNK_RETURN_STRING(buffer);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(add) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) + funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(subtract) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) - funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(multiply) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) * funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(divide) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) / funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(greater) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) > funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(greaterEqual) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) >= funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(less) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) < funk_to_number(vm, args[1]));
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
-	FUNK_ENSURE_MIN_ARG_COUNT(2);
-	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
-}
-
 typedef struct FunkArrayData {
 	FunkFunction** data;
 	uint16_t length;
@@ -325,6 +137,157 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
 	return NULL;
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
+	FUNK_RETURN_STRING("NULLA");
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(print) {
+	for (uint8_t i = 0; i < argCount; i++) {
+		printf("%s\n", funk_to_string(args[i]));
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
+	for (uint8_t i = 0; i < argCount; i++) {
+		printf("%.6g\n", funk_to_number(vm, args[i]));
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_clock) {
+	clock_t time = clock();
+	double inSeconds = (double) time / (double) CLOCKS_PER_SEC;
+
+	FUNK_RETURN_NUMBER(inSeconds);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
+	char* line = NULL;
+	size_t length = 0;
+
+	length = getline(&line, &length, stdin);
+	FunkString* string = funk_create_string(vm, line, length);
+
+	free(line);
+	return (FunkFunction *) funk_create_basic_function(vm, string);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(set) {
+	FUNK_ENSURE_ARG_COUNT(2);
+	funk_set_variable(vm, args[0]->name->chars, args[1]);
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(equal) {
+	FUNK_ENSURE_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(args[0]->name == args[1]->name);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(notEqual) {
+	FUNK_ENSURE_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(args[0]->name != args[1]->name);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(not) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	FUNK_RETURN_BOOL(!funk_is_true(vm, args[0]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_if) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+
+	if (funk_is_true(vm, args[0])) {
+		return funk_run_function(vm, args[1], 0);
+	} else if (argCount > 2) {
+		return funk_run_function(vm, args[2], 0);
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_while) {
+	FUNK_ENSURE_ARG_COUNT(2);
+
+	while (funk_is_true(vm, args[0])) {
+		funk_run_function(vm, args[1], 0);
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+
+	if (argCount == 2) {
+		FunkFunction* argument = args[0];
+
+		if (is_array(argument)) {
+			FunkArrayData* data = extract_array_data(vm, argument);
+
+			for (uint16_t i = 0; i < data->length; i++) {
+				funk_run_function_arged(vm, args[1], &data->data[i], 1);
+			}
+
+			return NULL;
+		}
+
+		FunkString* string = argument->name;
+		char buffer[2] = " \0";
+
+		for (uint16_t i = 0; i < string->length; i++) {
+			buffer[0] = string->chars[i];
+
+			FunkFunction* function = (FunkFunction*) funk_create_empty_function(vm, buffer);
+			funk_run_function_arged(vm, args[1], &function, 1);
+		}
+
+		return NULL;
+	}
+
+	FunkFunction* to = args[1];
+	double from = funk_to_number(vm, args[0]);
+	bool increment = from < funk_to_number(vm, to);
+
+	for (double i = funk_to_number(vm, args[0]);
+			increment == (i < funk_to_number(vm, to));
+			i += (increment ? 1 : -1)) {
+
+		FunkFunction* indexFunction = funk_number_to_string(vm, i);
+		funk_run_function_arged(vm, args[2], &indexFunction, 1);
+	}
+
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(space) {
+	// TODO: optional argument for how many spaces
+	FUNK_RETURN_STRING(" ");
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+
+	FunkFunction* client = args[0];
+
+	uint16_t from = (uint16_t) fmax(0, funk_to_number(vm, args[1]));
+	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(vm, args[2])) : 1;
+
+	if (length < 1) {
+		FUNK_RETURN_STRING("");
+	}
+
+	char string[length + 1];
+
+	memcpy((void*) string, (void*) (client->name->chars + from), length);
+	string[length] = '\0';
+
+	FUNK_RETURN_STRING(string);
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(length) {
 	FUNK_ENSURE_ARG_COUNT(1);
 	FunkFunction* argument = args[0];
@@ -362,6 +325,55 @@ FUNK_NATIVE_FUNCTION_DEFINITION(join) {
 
 	string[length] = '\0';
 	FUNK_RETURN_STRING(string);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_char) {
+	FUNK_ENSURE_ARG_COUNT(1);
+
+	uint8_t byte = (uint8_t) funk_to_number(vm, args[0]);
+	char buffer[2] = { (char) byte, '\0'};
+
+	FUNK_RETURN_STRING(buffer);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(add) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) + funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(subtract) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) - funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(multiply) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) * funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(divide) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) / funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(greater) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) > funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(greaterEqual) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) >= funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(less) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) < funk_to_number(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
 }
 
 void funk_open_std(FunkVm* vm) {

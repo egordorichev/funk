@@ -1,8 +1,2 @@
-set(myArray, array(a, b, c))
-
-push(myArray, d, e)
-remove(myArray, II)
-remove(myArray, NULLA)
-
-print(join(myArray))
-print(length(myArray))
+set(myArray, array(X, IX, V))
+for(myArray, printNumber)
