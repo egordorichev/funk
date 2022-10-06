@@ -197,7 +197,7 @@ FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 FunkFunction* funk_run_function_arged(FunkVm* vm, FunkFunction* function, FunkFunction** args, uint8_t argCount);
 FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* string, FunkFunction** args, uint8_t argCount);
 
-#define FUNK_NATIVE_FUNCTION_DEFINITION(name) FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t argCount)
+#define FUNK_NATIVE_FUNCTION_DEFINITION(name) static FunkFunction* name(FunkVm* vm, FunkFunction** args, uint8_t argCount)
 #define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, name)
 #define FUNK_RETURN_STRING(string) return (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, string, strlen(string)))
 #define FUNK_RETURN_NUMBER(number) return funk_number_to_string(vm, (number))

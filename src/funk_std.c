@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
 	FUNK_RETURN_STRING("NULLA");
@@ -21,6 +22,24 @@ FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
 	}
 
 	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_clock) {
+	clock_t time = clock();
+	double inSeconds = (double) time / (double) CLOCKS_PER_SEC;
+
+	FUNK_RETURN_NUMBER(inSeconds);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
+	char* line = NULL;
+	size_t length = 0;
+
+	length = getline(&line, &length, stdin);
+	FunkString* string = funk_create_string(vm, line, length);
+
+	free(line);
+	return (FunkFunction *) funk_create_basic_function(vm, string);
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(set) {
@@ -145,6 +164,20 @@ FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 	FUNK_RETURN_STRING(string);
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(_char) {
+	FUNK_ENSURE_ARG_COUNT(1);
+
+	uint8_t byte = (uint8_t) funk_to_number(vm, args[0]);
+	char buffer[2] = { (char) byte, '\0'};
+
+	FUNK_RETURN_STRING(buffer);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(length) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	FUNK_RETURN_NUMBER(args[0]->name->length);
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(add) {
 	FUNK_ENSURE_MIN_ARG_COUNT(2);
 	FUNK_RETURN_NUMBER(funk_to_number(vm, args[0]) + funk_to_number(vm, args[1]));
@@ -190,6 +223,9 @@ void funk_open_std(FunkVm* vm) {
 
 	FUNK_DEFINE_FUNCTION("print", print);
 	FUNK_DEFINE_FUNCTION("printNumber", printNumber);
+	FUNK_DEFINE_FUNCTION("clock", _clock);
+	FUNK_DEFINE_FUNCTION("readLine", readLine);
+
 	FUNK_DEFINE_FUNCTION("set", set);
 	FUNK_DEFINE_FUNCTION("equal", equal);
 	FUNK_DEFINE_FUNCTION("notEqual", notEqual);
@@ -202,6 +238,8 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("space", space);
 	FUNK_DEFINE_FUNCTION("join", join);
 	FUNK_DEFINE_FUNCTION("substring", substring);
+	FUNK_DEFINE_FUNCTION("char", _char);
+	FUNK_DEFINE_FUNCTION("length", length);
 
 	FUNK_DEFINE_FUNCTION("add", add);
 	FUNK_DEFINE_FUNCTION("subtract", subtract);

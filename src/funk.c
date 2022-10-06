@@ -90,7 +90,7 @@ static FunkToken make_token(FunkScanner* scanner, FunkTokenType type) {
 }
 
 static bool is_alpha(char c) {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '.' || c == '-';
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-';
 }
 
 static bool is_digit(char c) {
@@ -109,6 +109,10 @@ static FunkTokenType decide_token_type(FunkScanner* scanner) {
 	return FUNK_TOKEN_NAME;
 }
 
+static bool fits_for_name(char c) {
+	return is_alpha(c) || is_digit(c) || c == '.';
+}
+
 FunkToken funk_scan_token(FunkScanner* scanner) {
 	skip_whitespace(scanner);
 	scanner->start = scanner->current;
@@ -120,7 +124,7 @@ FunkToken funk_scan_token(FunkScanner* scanner) {
 	char c = advance_char(scanner);
 
 	if (is_alpha(c)) {
-		while (is_alpha(peek_char(scanner)) || is_digit(peek_char(scanner))) {
+		while (fits_for_name(peek_char(scanner))) {
 			advance_char(scanner);
 		}
 
@@ -665,12 +669,12 @@ void funk_free_vm(FunkVm* vm) {
 
 FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argCount) {
 	if (function == NULL) {
-		return NULL;
+		return function;
 	}
 
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 		FunkNativeFunction* nativeFunction = (FunkNativeFunction*) function;
-		return nativeFunction->fn(vm, vm->stackTop, argCount);
+		return nativeFunction->fn(vm, vm->stackTop + 1, argCount);
 	}
 
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;

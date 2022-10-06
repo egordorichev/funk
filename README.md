@@ -4,25 +4,20 @@ A language with the only data type being a function!
 
 ### Todo before release
 
-* For
 * std {
     + modules
     + file reading
-    + cli input
-    + length(str)
-    + char(byte)
 }
 
 * arrays
 * maps
-* count places after decimal point
 * exit compilation upon error
-* space multiplication
 * gc
 * docs
 * tests?
 * check all todos
-* command line arguments
+* vararg error
+* move file reading to funk api
 
 ### Bugs
 
@@ -39,3 +34,4 @@ A language with the only data type being a function!
 * goto jumping in the instruction loop
 * single arg lambdas `a => print(a)`
 * Exception system
+* Pass command line arguments to the program
