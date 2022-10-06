@@ -1,7 +1,6 @@
 set(myArray, array(a, b, c))
 
-myArray(II, e)
-print(myArray(II))
+// push(myArray, d)
 
-print(array)
-myArray(print)
+print(join(myArray))
+print(length(myArray))

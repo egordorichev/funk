@@ -7,9 +7,9 @@ A language with the only data type being a function!
 * std {
     + modules
     + file reading
+    + array api
 }
 
-* arrays
 * maps
 * exit compilation upon error
 * gc

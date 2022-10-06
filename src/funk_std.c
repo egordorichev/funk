@@ -123,27 +123,6 @@ FUNK_NATIVE_FUNCTION_DEFINITION(space) {
 	FUNK_RETURN_STRING(" ");
 }
 
-FUNK_NATIVE_FUNCTION_DEFINITION(join) {
-	uint16_t length = 0;
-
-	for (uint8_t i = 0; i < argCount; i++) {
-		length += args[i]->name->length;
-	}
-
-	char string[length + 1];
-	uint16_t index = 0;
-
-	for (uint8_t i = 0; i < argCount; i++) {
-		FunkFunction* arg = args[i];
-
-		memcpy((void*) (string + index), arg->name->chars, arg->name->length);
-		index += arg->name->length;
-	}
-
-	string[length] = '\0';
-	FUNK_RETURN_STRING(string);
-}
-
 FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 	FUNK_ENSURE_MIN_ARG_COUNT(2);
 
@@ -171,11 +150,6 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_char) {
 	char buffer[2] = { (char) byte, '\0'};
 
 	FUNK_RETURN_STRING(buffer);
-}
-
-FUNK_NATIVE_FUNCTION_DEFINITION(length) {
-	FUNK_ENSURE_ARG_COUNT(1);
-	FUNK_RETURN_NUMBER(args[0]->name->length);
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(add) {
@@ -224,7 +198,12 @@ typedef struct FunkArrayData {
 	uint16_t allocated;
 } FunkArrayData;
 
-static inline FunkArrayData* extract_array_data(FunkNativeFunction* function) {
+static FunkArrayData* extract_array_data(FunkVm* vm, FunkFunction* function) {
+	if (function->object.type != FUNK_OBJECT_NATIVE_FUNCTION) {
+		funk_error(vm, "Expected an array as argument");
+		return NULL;
+	}
+
 	return (FunkArrayData*) ((FunkNativeFunction*) function)->data;
 }
 
@@ -236,7 +215,7 @@ static void cleanup_array_data(FunkVm* vm, FunkNativeFunction* function) {
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(arrayCallback) {
-	FunkArrayData* data = extract_array_data(self);
+	FunkArrayData* data = extract_array_data(vm, (FunkFunction *) self);
 
 	if (argCount == 1) {
 		if (funk_function_has_code(args[0])) {
@@ -285,6 +264,49 @@ FUNK_NATIVE_FUNCTION_DEFINITION(array) {
 	function->data = (void*) data;
 
 	return (FunkFunction *) function;
+}
+
+static inline bool is_array(FunkFunction* argument) {
+	return argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_array_data;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(length) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	FunkFunction* argument = args[0];
+
+	if (is_array(argument)) {
+		FunkArrayData* data = extract_array_data(vm, argument);
+		FUNK_RETURN_NUMBER(data->length);
+	}
+
+	FUNK_RETURN_NUMBER(argument->name->length);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(join) {
+	uint16_t length = 0;
+
+	if (argCount == 1 && is_array(args[0])) {
+		FunkArrayData* data = extract_array_data(vm, args[0]);
+		args = data->data;
+		argCount = data->length;
+	}
+
+	for (uint8_t i = 0; i < argCount; i++) {
+		length += args[i]->name->length;
+	}
+
+	char string[length + 1];
+	uint16_t index = 0;
+
+	for (uint8_t i = 0; i < argCount; i++) {
+		FunkFunction* arg = args[i];
+
+		memcpy((void*) (string + index), arg->name->chars, arg->name->length);
+		index += arg->name->length;
+	}
+
+	string[length] = '\0';
+	FUNK_RETURN_STRING(string);
 }
 
 void funk_open_std(FunkVm* vm) {
