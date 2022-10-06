@@ -1,1 +1,7 @@
-print(length(hello))
+set(myArray, array(a, b, c))
+
+myArray(II, e)
+print(myArray(II))
+
+print(array)
+myArray(print)

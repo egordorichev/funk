@@ -176,6 +176,12 @@ void funk_free_object(sFunkVm* vm, FunkObject* object) {
 		}
 
 		case FUNK_OBJECT_NATIVE_FUNCTION: {
+			FunkNativeFunction* function = (FunkNativeFunction*) object;
+
+			if (function->cleanupFn != NULL) {
+				function->cleanupFn(vm, function);
+			}
+
 			break;
 		}
 
@@ -304,6 +310,8 @@ FunkNativeFunction* funk_create_native_function(sFunkVm* vm, FunkString* name, F
 	function->parent.object.type = FUNK_OBJECT_NATIVE_FUNCTION;
 	function->parent.name = name;
 	function->fn = fn;
+	function->data = NULL;
+	function->cleanupFn = NULL;
 
 	return function;
 }
@@ -674,7 +682,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 		FunkNativeFunction* nativeFunction = (FunkNativeFunction*) function;
-		return nativeFunction->fn(vm, vm->stackTop + 1, argCount);
+		return nativeFunction->fn(vm, nativeFunction, vm->stackTop + 1, argCount);
 	}
 
 	FunkBasicFunction* fn = (FunkBasicFunction*) function;
@@ -760,7 +768,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 
 				if (callee->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
 					FunkNativeFunction* nativeFunction = (FunkNativeFunction*) callee;
-					result = nativeFunction->fn(vm, (vm->stackTop - argumentCount), argumentCount);
+					result = nativeFunction->fn(vm, nativeFunction, (vm->stackTop - argumentCount), argumentCount);
 				} else {
 					FunkBasicFunction* basicFunction = (FunkBasicFunction*) callee;
 					vm->stackTop = stackTop;

@@ -218,6 +218,75 @@ FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
 	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
 }
 
+typedef struct FunkArrayData {
+	FunkFunction** data;
+	uint16_t length;
+	uint16_t allocated;
+} FunkArrayData;
+
+static inline FunkArrayData* extract_array_data(FunkNativeFunction* function) {
+	return (FunkArrayData*) ((FunkNativeFunction*) function)->data;
+}
+
+static void cleanup_array_data(FunkVm* vm, FunkNativeFunction* function) {
+	if (function->data != NULL) {
+		vm->freeFn(function->data);
+		function->data = NULL;
+	}
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(arrayCallback) {
+	FunkArrayData* data = extract_array_data(self);
+
+	if (argCount == 1) {
+		if (funk_function_has_code(args[0])) {
+			for (uint16_t i = 0; i < data->length; i++) {
+				funk_run_function_arged(vm, args[0], &data->data[i], 1);
+			}
+
+			return NULL;
+		}
+
+		int32_t index = (int32_t) funk_to_number(vm, args[0]);
+
+		if (index < 0 || index >= data->length) {
+			return NULL;
+		}
+
+		return data->data[index];
+	}
+
+	FUNK_ENSURE_ARG_COUNT(2);
+	int32_t index = (int32_t) funk_to_number(vm, args[0]);
+
+	if (index < 0 || index >= data->length) {
+		return NULL;
+	}
+
+	data->data[index] = args[1];
+	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(array) {
+	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$arrayData", 10), arrayCallback);
+	FunkArrayData* data = (FunkArrayData*) vm->allocFn(sizeof(FunkArrayData));
+
+	data->length = argCount;
+	data->allocated = argCount;
+
+	if (argCount > 0) {
+		size_t size = sizeof(FunkFunction*) * argCount;
+		data->data = (FunkFunction**) vm->allocFn(size);
+
+		memcpy((void*) data->data, args, size);
+	}
+
+	function->cleanupFn = cleanup_array_data;
+	function->data = (void*) data;
+
+	return (FunkFunction *) function;
+}
+
 void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("NULLA", nulla);
 
@@ -249,4 +318,6 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("greaterEqual", greaterEqual);
 	FUNK_DEFINE_FUNCTION("less", less);
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
+
+	FUNK_DEFINE_FUNCTION("array", array);
 }
