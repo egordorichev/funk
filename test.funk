@@ -1,1 +1,2 @@
-print(require('./demos/fib'))
+print(require(demos.fib))
+print(require(demos.fib))

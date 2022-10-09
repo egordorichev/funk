@@ -672,6 +672,7 @@ FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn error
 
 	funk_init_table(&vm->strings);
 	funk_init_table(&vm->globals);
+	funk_init_table(&vm->modules);
 
 	return vm;
 }
@@ -683,6 +684,7 @@ void funk_free_vm(FunkVm* vm) {
 
 	funk_free_table(vm, &vm->strings);
 	funk_free_table(vm, &vm->globals);
+	funk_free_table(vm, &vm->modules);
 
 	FunkObject* object = vm->objects;
 
@@ -1041,7 +1043,7 @@ void funk_print_stack_trace(FunkVm* vm) {
 	FunkCallFrame* frame = vm->callFrame;
 
 	while (frame != NULL) {
-		fprintf(stderr, "%s()\n", frame->function->parent.name->chars);
+		fprintf(stderr, "%s():\n", frame->function->parent.name->chars);
 		frame = frame->previous;
 	}
 }

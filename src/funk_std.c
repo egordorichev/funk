@@ -506,18 +506,37 @@ FUNK_NATIVE_FUNCTION_DEFINITION(require) {
 	FUNK_ENSURE_ARG_COUNT(1);
 
 	FunkString* path = args[0]->name;
+	FunkFunction* existingResult;
+
+	if (funk_table_get(&vm->modules, path, (FunkObject **) &existingResult)) {
+		return existingResult;
+	}
+
 	uint16_t length = path->length + 6;
 	char buffer[length];
 
 	memcpy((void*) buffer, path->chars, path->length);
-	memcpy((void*) (buffer + path->length), ".funk\0", 6);
 
+	for (uint16_t i = 0; i < path->length; i++) {
+		if (buffer[i] == '.') {
+			buffer[i] = '/';
+		}
+	}
+
+	memcpy((void*) (buffer + path->length), ".funk\0", 6);
 	FunkFunction* result = funk_run_file(vm, buffer);
+
+	funk_table_set(vm, &vm->modules, path, (FunkObject *) result);
 
 	return result;
 }
 
 void funk_open_std(FunkVm* vm) {
+	FUNK_DEFINE_FUNCTION("array", array);
+	FUNK_DEFINE_FUNCTION("map", map);
+	FUNK_DEFINE_FUNCTION("push", push);
+	FUNK_DEFINE_FUNCTION("remove", _remove);
+
 	FUNK_DEFINE_FUNCTION("NULLA", nulla);
 	FUNK_DEFINE_FUNCTION("variable", variable);
 
@@ -551,8 +570,5 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("less", less);
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
 
-	FUNK_DEFINE_FUNCTION("array", array);
-	FUNK_DEFINE_FUNCTION("map", map);
-	FUNK_DEFINE_FUNCTION("push", push);
-	FUNK_DEFINE_FUNCTION("remove", _remove);
+	FUNK_DEFINE_FUNCTION("require", require);
 }

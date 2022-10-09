@@ -5,7 +5,6 @@ A language with the only data type being a function!
 ### Todo before release
 
 * std {
-    + modules
     + file reading
 }
 
@@ -13,17 +12,11 @@ A language with the only data type being a function!
 * docs
 * tests?
 * check all todos
-* vararg error
-* move file reading to funk api
-
-### Bugs
-
-* Lambda name has A after the line in it for some reason
+* vararg error fn
 
 ### Demos
 
 * BF compiler
-* fractal
 
 ### Possible future improvements
 

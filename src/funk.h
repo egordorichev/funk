@@ -185,8 +185,10 @@ typedef struct sFunkVm {
 	FunkErrorFn errorFn;
 
 	FunkTable strings;
-	FunkObject* objects;
 	FunkTable globals;
+	FunkTable modules;
+
+	FunkObject* objects;
 
 	FunkFunction* stack[FUNK_STACK_SIZE];
 	FunkFunction** stackTop;
