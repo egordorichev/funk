@@ -502,6 +502,21 @@ FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
 	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(require) {
+	FUNK_ENSURE_ARG_COUNT(1);
+
+	FunkString* path = args[0]->name;
+	uint16_t length = path->length + 6;
+	char buffer[length];
+
+	memcpy((void*) buffer, path->chars, path->length);
+	memcpy((void*) (buffer + path->length), ".funk\0", 6);
+
+	FunkFunction* result = funk_run_file(vm, buffer);
+
+	return result;
+}
+
 void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("NULLA", nulla);
 	FUNK_DEFINE_FUNCTION("variable", variable);

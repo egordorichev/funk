@@ -323,8 +323,7 @@ static void advance_token(FunkCompiler* compiler) {
 
 static void compilation_error(FunkCompiler* compiler, const char* error) {
 	// TODO: print the line
-	compiler->vm->errorFn(compiler->vm, error);
-	compiler->hadError = true;
+	funk_error(compiler->vm, error);
 }
 
 static void consume_token(FunkCompiler* compiler, FunkTokenType type, const char* message) {
@@ -488,6 +487,10 @@ static void compile_declaration(FunkCompiler* compiler) {
 }
 
 FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* string) {
+	if (setjmp(vm->errorJumpBuffer) != 0) {
+		return NULL;
+	}
+
 	FunkString* string_name = funk_create_string(vm, name, strlen(name));
 	FunkBasicFunction* function = funk_create_basic_function(vm, string_name);
 
@@ -497,7 +500,6 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 	FunkCompiler compiler;
 
 	compiler.vm = vm;
-	compiler.hadError = false;
 	compiler.scanner = &scanner;
 	compiler.function = function;
 
@@ -509,7 +511,7 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 
 	write_uint8_t(&compiler, FUNK_INSTRUCTION_RETURN);
 
-	return compiler.hadError ? NULL : &function->parent;
+	return &function->parent;
 }
 
 void funk_init_table(FunkTable* table) {
@@ -696,6 +698,10 @@ void funk_free_vm(FunkVm* vm) {
 FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argCount) {
 	if (function == NULL) {
 		return function;
+	}
+
+	if (setjmp(vm->errorJumpBuffer) != 0) {
+		return NULL;
 	}
 
 	if (function->object.type == FUNK_OBJECT_NATIVE_FUNCTION) {
@@ -926,6 +932,39 @@ FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* st
 	return funk_run_function_arged(vm, function, args, argCount);
 }
 
+const char* read_file(const char* path) {
+	FILE* file = fopen(path, "rb");
+
+	if (file == NULL) {
+		return NULL;
+	}
+
+	fseek(file, 0L, SEEK_END);
+	size_t fileSize = ftell(file);
+	rewind(file);
+
+	char* buffer = (char*) malloc(fileSize + 1);
+	size_t bytes_read = fread(buffer, sizeof(char), fileSize, file);
+	buffer[bytes_read] = '\0';
+
+	fclose(file);
+	return (const char*) buffer;
+}
+
+FunkFunction* funk_run_file(FunkVm* vm, const char* file) {
+	const char* source = read_file(file);
+
+	if (source == NULL) {
+		funk_error(vm, "Failed to open the source file");
+		return NULL;
+	}
+
+	FunkFunction* result = funk_run_string(vm, file, source);
+	free((void*) source);
+
+	return result;
+}
+
 void funk_set_global(FunkVm* vm, const char* name, FunkFunction* function) {
 	funk_table_set(vm, &vm->globals, funk_create_string(vm, name, strlen(name)), (FunkObject*) function);
 }
@@ -995,6 +1034,16 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {
 
 void funk_error(FunkVm* vm, const char* error) {
 	vm->errorFn(vm, error);
+	longjmp(vm->errorJumpBuffer, 1);
+}
+
+void funk_print_stack_trace(FunkVm* vm) {
+	FunkCallFrame* frame = vm->callFrame;
+
+	while (frame != NULL) {
+		fprintf(stderr, "%s()\n", frame->function->parent.name->chars);
+		frame = frame->previous;
+	}
 }
 
 bool funk_function_has_code(FunkFunction* function) {

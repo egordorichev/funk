@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
+#include <setjmp.h>
 
 #define UNREACHABLE assert(false);
 #define FUNK_GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -137,8 +138,6 @@ typedef struct FunkCompiler {
 	FunkScanner* scanner;
 	sFunkVm* vm;
 
-	bool hadError;
-
 	FunkToken previous;
 	FunkToken current;
 	FunkBasicFunction* function;
@@ -192,6 +191,8 @@ typedef struct sFunkVm {
 	FunkFunction* stack[FUNK_STACK_SIZE];
 	FunkFunction** stackTop;
 	FunkCallFrame* callFrame;
+
+	jmp_buf errorJumpBuffer;
 } FunkVm;
 
 FunkVm* funk_create_vm(FunkAllocFn allocFn, FunkFreeFn freeFn, FunkErrorFn errorFn);
@@ -201,6 +202,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 FunkFunction* funk_run_function_arged(FunkVm* vm, FunkFunction* function, FunkFunction** args, uint8_t argCount);
 FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* string, FunkFunction** args, uint8_t argCount);
+FunkFunction* funk_run_file(FunkVm* vm, const char* file);
 
 #define FUNK_NATIVE_FUNCTION_DEFINITION(name) static FunkFunction* name(FunkVm* vm, FunkNativeFunction* self, FunkFunction** args, uint8_t argCount)
 #define FUNK_DEFINE_FUNCTION(string_name, name) funk_define_native(vm, string_name, (FunkNativeFn) (name))
@@ -220,6 +222,7 @@ void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function);
 FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
 
 void funk_error(FunkVm* vm, const char* error);
+void funk_print_stack_trace(FunkVm* vm);
 bool funk_function_has_code(FunkFunction* function);
 bool funk_is_true(FunkVm* vm, FunkFunction* function);
 double funk_to_number(FunkVm* vm, FunkFunction* function);

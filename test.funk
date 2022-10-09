@@ -1,4 +1,1 @@
-set(variable(a), b)
-print(get(variable(a)))
-set(variable(a), d)
-print(get(variable(a)))
+print(require('./demos/fib'))

@@ -7,3 +7,4 @@ function fib(n) {
 }
 
 printNumber(fib(X)) // 55
+return XI
