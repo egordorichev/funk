@@ -204,6 +204,7 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 FunkFunction* funk_run_string(FunkVm* vm, const char* name, const char* string);
 FunkFunction* funk_run_function_arged(FunkVm* vm, FunkFunction* function, FunkFunction** args, uint8_t argCount);
 FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* string, FunkFunction** args, uint8_t argCount);
+const char* funk_read_file(const char* path);
 FunkFunction* funk_run_file(FunkVm* vm, const char* file);
 
 #define FUNK_NATIVE_FUNCTION_DEFINITION(name) static FunkFunction* name(FunkVm* vm, FunkNativeFunction* self, FunkFunction** args, uint8_t argCount)
@@ -213,8 +214,8 @@ FunkFunction* funk_run_file(FunkVm* vm, const char* file);
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
 #define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
 #define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
-#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected 2 arguments"); return NULL; }
-#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected 2 arguments"); return NULL; }
+#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected N of arguments"); return NULL; }
+#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected at least N arguments"); return NULL; }
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
 

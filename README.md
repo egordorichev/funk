@@ -4,10 +4,6 @@ A language with the only data type being a function!
 
 ### Todo before release
 
-* std {
-    + file reading
-}
-
 * gc
 * docs
 * tests?

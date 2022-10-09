@@ -586,16 +586,16 @@ bool funk_table_set(FunkVm* vm, FunkTable* table, FunkString* key, FunkObject* v
 	}
 
 	FunkTableEntry* entry = find_entry(table->entries, table->capacity, key);
-	bool is_new = entry->key == NULL;
+	bool isNew = entry->key == NULL;
 
-	if (is_new && entry->value == NULL) {
+	if (isNew && entry->value == NULL) {
 		table->count++;
 	}
 
 	entry->key = key;
 	entry->value = value;
 
-	return is_new;
+	return isNew;
 }
 
 bool funk_table_get(FunkTable* table, FunkString* key, FunkObject** value) {
@@ -934,7 +934,7 @@ FunkFunction* funk_run_string_arged(FunkVm* vm, const char* name, const char* st
 	return funk_run_function_arged(vm, function, args, argCount);
 }
 
-const char* read_file(const char* path) {
+const char* funk_read_file(const char* path) {
 	FILE* file = fopen(path, "rb");
 
 	if (file == NULL) {
@@ -954,7 +954,7 @@ const char* read_file(const char* path) {
 }
 
 FunkFunction* funk_run_file(FunkVm* vm, const char* file) {
-	const char* source = read_file(file);
+	const char* source = funk_read_file(file);
 
 	if (source == NULL) {
 		funk_error(vm, "Failed to open the source file");
@@ -1049,7 +1049,7 @@ void funk_print_stack_trace(FunkVm* vm) {
 }
 
 bool funk_function_has_code(FunkFunction* function) {
-	return function->object.type == FUNK_OBJECT_NATIVE_FUNCTION ? true : ((FunkBasicFunction*) function)->codeLength > 0;
+	return function != NULL && function->object.type == FUNK_OBJECT_NATIVE_FUNCTION ? true : ((FunkBasicFunction*) function)->codeLength > 0;
 }
 
 bool funk_is_true(FunkVm* vm, FunkFunction* function) {
@@ -1057,7 +1057,7 @@ bool funk_is_true(FunkVm* vm, FunkFunction* function) {
 		function = funk_run_function(vm, function, 0);
 	}
 
-	return strcmp(function->name->chars, "true") == 0;
+	return function == NULL ? false : strcmp(function->name->chars, "true") == 0;
 }
 
 static uint32_t parse_roman_numeral(const char* string, uint16_t length) {
@@ -1132,6 +1132,10 @@ static uint16_t calculate_number_of_places_after_dot(double n) {
 }
 
 double funk_to_number(FunkVm* vm, FunkFunction* function) {
+	if (function == NULL) {
+		return 0;
+	}
+
 	if (funk_function_has_code(function)) {
 		function = funk_run_function(vm, function, 0);
 	}

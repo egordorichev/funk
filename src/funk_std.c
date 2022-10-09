@@ -4,6 +4,10 @@
 #include <math.h>
 #include <time.h>
 
+static inline bool is_array(FunkFunction* argument);
+static inline bool is_map(FunkFunction* argument);
+static inline bool is_file(FunkFunction* argument);
+
 typedef struct FunkArrayData {
 	FunkFunction** data;
 	uint16_t length;
@@ -11,7 +15,7 @@ typedef struct FunkArrayData {
 } FunkArrayData;
 
 static FunkArrayData* extract_array_data(FunkVm* vm, FunkFunction* function) {
-	if (function->object.type != FUNK_OBJECT_NATIVE_FUNCTION) {
+	if (!is_array(function)) {
 		funk_error(vm, "Expected an array as argument");
 		return NULL;
 	}
@@ -79,7 +83,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(array) {
 }
 
 static inline bool is_array(FunkFunction* argument) {
-	return argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_array_data;
+	return argument != NULL && argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_array_data;
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(push) {
@@ -116,8 +120,8 @@ typedef struct FunkMapData {
 } FunkMapData;
 
 static FunkMapData* extract_map_data(FunkVm* vm, FunkFunction* function) {
-	if (function->object.type != FUNK_OBJECT_NATIVE_FUNCTION) {
-		funk_error(vm, "Expected an array as argument");
+	if (!is_map(function)) {
+		funk_error(vm, "Expected a map as argument");
 		return NULL;
 	}
 
@@ -137,6 +141,10 @@ static void cleanup_map_data(FunkVm* vm, FunkNativeFunction* function) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(mapCallback) {
 	FunkMapData* data = extract_map_data(vm, (FunkFunction *) self);
+
+	if (argCount > 0 && args[0] == NULL) {
+		return NULL;
+	}
 
 	if (argCount == 1) {
 		if (funk_function_has_code(args[0])) {
@@ -168,7 +176,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(mapCallback) {
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(map) {
-	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$mapData", 10),(FunkNativeFn) mapCallback);
+	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$mapData", 8),(FunkNativeFn) mapCallback);
 	FunkMapData* data = (FunkMapData*) vm->allocFn(sizeof(FunkMapData));
 
 	funk_init_table(&data->table);
@@ -177,6 +185,10 @@ FUNK_NATIVE_FUNCTION_DEFINITION(map) {
 		for (uint8_t i = 0; i < argCount; i += 2) {
 			if (i + 1 >= argCount) {
 				break;
+			}
+
+			if (args[i] == NULL) {
+				continue;
 			}
 
 			funk_table_set(vm, &data->table, args[i]->name, (FunkObject *) args[i + 1]);
@@ -190,11 +202,16 @@ FUNK_NATIVE_FUNCTION_DEFINITION(map) {
 }
 
 static inline bool is_map(FunkFunction* argument) {
-	return argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_map_data;
+	return argument != NULL && argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_map_data;
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
 	FUNK_ENSURE_ARG_COUNT(2);
+
+	if (args[1] == NULL) {
+		return NULL;
+	}
+
 	FunkFunction* argument = args[0];
 
 	if (is_map(argument)) {
@@ -231,9 +248,13 @@ FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(variable) {
 	FUNK_ENSURE_ARG_COUNT(1);
+
+	if (args[0] == NULL) {
+		return NULL;
+	}
+
 	uint16_t length = args[0]->name->length + 1;
 	char string[length + 1];
-	uint16_t index = 0;
 
 	string[0] = '$';
 	memcpy((void*) (string + 1), args[0]->name->chars, args[0]->name->length);
@@ -265,37 +286,44 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_clock) {
 	FUNK_RETURN_NUMBER(inSeconds);
 }
 
-FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
-	char* line = NULL;
-	size_t length = 0;
-
-	length = getline(&line, &length, stdin);
-	FunkString* string = funk_create_string(vm, line, length);
-
-	free(line);
-	return (FunkFunction *) funk_create_basic_function(vm, string);
-}
-
 FUNK_NATIVE_FUNCTION_DEFINITION(set) {
 	FUNK_ENSURE_ARG_COUNT(2);
-	funk_set_variable(vm, args[0]->name->chars, args[1]);
 
+	if (args[0] == NULL) {
+		return NULL;
+	}
+
+	funk_set_variable(vm, args[0]->name->chars, args[1]);
 	return NULL;
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(get) {
 	FUNK_ENSURE_ARG_COUNT(1);
+
+	if (args[0] == NULL) {
+		return NULL;
+	}
+
 	return funk_get_variable(vm, args[0]->name->chars);
 }
 
-
 FUNK_NATIVE_FUNCTION_DEFINITION(equal) {
 	FUNK_ENSURE_ARG_COUNT(2);
+
+	if (args[0] == NULL || args[1] == NULL) {
+		FUNK_RETURN_BOOL(args[0] == args[1]);
+	}
+
 	FUNK_RETURN_BOOL(args[0]->name == args[1]->name);
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(notEqual) {
 	FUNK_ENSURE_ARG_COUNT(2);
+
+	if (args[0] == NULL || args[1] == NULL) {
+		FUNK_RETURN_BOOL(args[0] != args[1]);
+	}
+
 	FUNK_RETURN_BOOL(args[0]->name != args[1]->name);
 }
 
@@ -332,6 +360,10 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
 	if (argCount == 2) {
 		FunkFunction* argument = args[0];
 
+		if (argument == NULL) {
+			return NULL;
+		}
+
 		if (is_array(argument)) {
 			FunkArrayData* data = extract_array_data(vm, argument);
 
@@ -345,6 +377,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
 
 			for (int32_t i = 0; i <= data->table.capacity; i++) {
 				FunkTableEntry* entry = &data->table.entries[i];
+
 				if (entry->key != NULL) {
 					FunkFunction* buffer[2] = {
 						(FunkFunction*) funk_create_basic_function(vm, entry->key), // Bye-bye efficiency!
@@ -387,14 +420,25 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(space) {
-	// TODO: optional argument for how many spaces
 	FUNK_RETURN_STRING(" ");
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(separator) {
+	FUNK_RETURN_STRING("/");
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(dot) {
+	FUNK_RETURN_STRING(".");
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 	FUNK_ENSURE_MIN_ARG_COUNT(2);
 
 	FunkFunction* client = args[0];
+
+	if (client == NULL) {
+		return NULL;
+	}
 
 	uint16_t from = (uint16_t) fmax(0, funk_to_number(vm, args[1]));
 	uint16_t length = argCount > 2 ? (uint16_t) fmin(client->name->length - 1 - from, funk_to_number(vm, args[2])) : 1;
@@ -414,6 +458,10 @@ FUNK_NATIVE_FUNCTION_DEFINITION(substring) {
 FUNK_NATIVE_FUNCTION_DEFINITION(length) {
 	FUNK_ENSURE_ARG_COUNT(1);
 	FunkFunction* argument = args[0];
+
+	if (argument == NULL) {
+		FUNK_RETURN_NUMBER(0);
+	}
 
 	if (is_array(argument)) {
 		FunkArrayData* data = extract_array_data(vm, argument);
@@ -436,7 +484,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(join) {
 	}
 
 	for (uint8_t i = 0; i < argCount; i++) {
-		length += args[i]->name->length;
+		length += args[i] == NULL ? 4 : args[i]->name->length;
 	}
 
 	char string[length + 1];
@@ -444,9 +492,10 @@ FUNK_NATIVE_FUNCTION_DEFINITION(join) {
 
 	for (uint8_t i = 0; i < argCount; i++) {
 		FunkFunction* arg = args[i];
+		uint16_t nameLength = arg == NULL ? 4 : arg->name->length;
 
-		memcpy((void*) (string + index), arg->name->chars, arg->name->length);
-		index += arg->name->length;
+		memcpy((void*) (string + index), arg == NULL ? "null" : arg->name->chars, nameLength);
+		index += nameLength;
 	}
 
 	string[length] = '\0';
@@ -504,8 +553,12 @@ FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
 
 FUNK_NATIVE_FUNCTION_DEFINITION(require) {
 	FUNK_ENSURE_ARG_COUNT(1);
-
 	FunkString* path = args[0]->name;
+
+	if (path == NULL) {
+		return NULL;
+	}
+
 	FunkFunction* existingResult;
 
 	if (funk_table_get(&vm->modules, path, (FunkObject **) &existingResult)) {
@@ -527,8 +580,108 @@ FUNK_NATIVE_FUNCTION_DEFINITION(require) {
 	FunkFunction* result = funk_run_file(vm, buffer);
 
 	funk_table_set(vm, &vm->modules, path, (FunkObject *) result);
-
 	return result;
+}
+
+typedef struct FunkFileData {
+	FILE* file;
+	char* path;
+} FunkFileData;
+
+static FunkFileData* extract_file_data(FunkVm* vm, FunkFunction* function) {
+	if (!is_file(function)) {
+		funk_error(vm, "Expected a file as argument");
+		return NULL;
+	}
+
+	return (FunkFileData*) ((FunkNativeFunction*) function)->data;
+}
+
+static void cleanup_file_data(FunkVm* vm, FunkNativeFunction* function) {
+	if (function->data != NULL) {
+		FunkFileData* fileData = (FunkFileData*) function->data;
+
+		if (fileData->file != NULL) {
+			fclose(fileData->file);
+		}
+
+		if (fileData->path != NULL) {
+			vm->freeFn(fileData);
+		}
+
+		function->data = NULL;
+	}
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(fileCallback) {
+	FunkFileData* data = extract_file_data(vm, (FunkFunction *) self);
+	const char* string = funk_read_file(data->path);
+
+	if (string == NULL) {
+		return NULL;
+	}
+
+	FUNK_RETURN_STRING(string);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(file) {
+	FUNK_ENSURE_ARG_COUNT(1);
+
+	if (args[0] == NULL) {
+		return NULL;
+	}
+
+	FunkNativeFunction* function = funk_create_native_function(vm, funk_create_string(vm, "$fileData", 9),(FunkNativeFn) fileCallback);
+	FunkFileData* data = (FunkFileData*) vm->allocFn(sizeof(FunkFileData));
+
+	uint16_t length = args[0]->name->length;
+
+	data->file = fopen(args[0]->name->chars, "rw");
+	data->path = (char*) vm->allocFn(length);
+
+	memcpy((void*) data->path, args[0]->name->chars, length + 1);
+
+	function->data = data;
+	function->cleanupFn = cleanup_file_data;
+
+	return (FunkFunction *) function;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(close) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	FunkFileData* data = extract_file_data(vm, args[0]);
+
+	if (data->file != NULL) {
+		fclose(data->file);
+		data->file = NULL;
+	}
+
+	return NULL;
+}
+
+static inline bool is_file(FunkFunction* argument) {
+	return argument != NULL && argument->object.type == FUNK_OBJECT_NATIVE_FUNCTION && ((FunkNativeFunction*) argument)->cleanupFn == cleanup_file_data;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
+	void* stream = stdin;
+
+	if (argCount > 0 && is_file(args[0])) {
+		stream = extract_file_data(vm, args[0])->file;
+
+		if (stream == NULL) {
+			return NULL;
+		}
+	}
+
+	char* line = NULL;
+	size_t length = 0;
+
+	length = getline(&line, &length, stream);
+	FunkString* string = funk_create_string(vm, line, length);
+
+	free(line);
+	return (FunkFunction *) funk_create_basic_function(vm, string);
 }
 
 void funk_open_std(FunkVm* vm) {
@@ -556,6 +709,8 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("for", _for);
 
 	FUNK_DEFINE_FUNCTION("space", space);
+	FUNK_DEFINE_FUNCTION("separator", separator);
+	FUNK_DEFINE_FUNCTION("dot", dot);
 	FUNK_DEFINE_FUNCTION("join", join);
 	FUNK_DEFINE_FUNCTION("substring", substring);
 	FUNK_DEFINE_FUNCTION("char", _char);
@@ -571,4 +726,7 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
 
 	FUNK_DEFINE_FUNCTION("require", require);
+
+	FUNK_DEFINE_FUNCTION("file", file);
+	FUNK_DEFINE_FUNCTION("close", close);
 }
