@@ -214,8 +214,8 @@ FunkFunction* funk_run_file(FunkVm* vm, const char* file);
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
 #define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
 #define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
-#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected N of arguments"); return NULL; }
-#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected at least N arguments"); return NULL; }
+#define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected %i of arguments", (count)); return NULL; }
+#define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected at least %i arguments", (count)); return NULL; }
 
 void funk_define_native(FunkVm* vm, const char* name, FunkNativeFn fn);
 
@@ -224,7 +224,7 @@ FunkFunction* funk_get_global(FunkVm* vm, const char* name);
 void funk_set_variable(FunkVm* vm, const char* name, FunkFunction* function);
 FunkFunction* funk_get_variable(FunkVm* vm, const char* name);
 
-void funk_error(FunkVm* vm, const char* error);
+void funk_error(FunkVm* vm, const char* message, ...);
 void funk_print_stack_trace(FunkVm* vm);
 bool funk_function_has_code(FunkFunction* function);
 bool funk_is_true(FunkVm* vm, FunkFunction* function);

@@ -8,7 +8,6 @@ A language with the only data type being a function!
 * docs
 * tests?
 * check all todos
-* vararg error fn
 
 ### Demos
 

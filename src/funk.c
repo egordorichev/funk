@@ -321,17 +321,12 @@ static void advance_token(FunkCompiler* compiler) {
 	compiler->current = funk_scan_token(compiler->scanner);
 }
 
-static void compilation_error(FunkCompiler* compiler, const char* error) {
-	// TODO: print the line
-	funk_error(compiler->vm, error);
-}
-
 static void consume_token(FunkCompiler* compiler, FunkTokenType type, const char* message) {
 	if (compiler->current.type == type) {
 		return advance_token(compiler);
 	}
 
-	compilation_error(compiler, message);
+	funk_error(compiler->vm, "%s, got %.*s", message, compiler->current.length, compiler->current.start);
 }
 
 static bool match_token(FunkCompiler* compiler, FunkTokenType type) {
@@ -957,7 +952,7 @@ FunkFunction* funk_run_file(FunkVm* vm, const char* file) {
 	const char* source = funk_read_file(file);
 
 	if (source == NULL) {
-		funk_error(vm, "Failed to open the source file");
+		funk_error(vm, "Failed to open '%s'", file);
 		return NULL;
 	}
 
@@ -1034,8 +1029,19 @@ FunkFunction* funk_get_variable(FunkVm* vm, const char* name) {
 	return result;
 }
 
-void funk_error(FunkVm* vm, const char* error) {
-	vm->errorFn(vm, error);
+void funk_error(FunkVm* vm, const char* message, ...) {
+	va_list args;
+	va_start(args, message);
+	va_list args_copy;
+	va_copy(args_copy, args);
+	size_t buffer_size = vsnprintf(NULL, 0, message, args_copy) + 1;
+	va_end(args_copy);
+
+	char buffer[buffer_size];
+	vsnprintf(buffer, buffer_size, message, args);
+	va_end(args);
+
+	vm->errorFn(vm, buffer);
 	longjmp(vm->errorJumpBuffer, 1);
 }
 
