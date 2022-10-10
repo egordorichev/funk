@@ -1,0 +1,17 @@
+function printTrue() {
+	print(true)
+}
+
+function printFalse() {
+	print(false)
+}
+
+if(true, printTrue) // Expected: true
+if(false, printFalse)
+if(() => true, printTrue) // Expected: true
+if(true, () => print(true)) // Expected: true
+
+if(false, printFalse, printTrue) // Expected: true
+if(false, printFalse, {
+	print(true)
+}) // Expected: true

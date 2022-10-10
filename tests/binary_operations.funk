@@ -1,1 +1,28 @@
 printNumber(add(I, II)) // Expected: 3
+printNumber(subtract(XI, II)) // Expected: 9
+printNumber(multiply(III, II)) // Expected: 6
+printNumber(divide(X, II)) // Expected: 5
+
+print(equal(X, X)) // Expected: true
+print(equal(X, IX)) // Expected: false
+print(not(true)) // Expected: false
+print(not(false)) // Expected: true
+print(notEqual(I, II)) // Expected: true
+print(notEqual(II, II)) // Expected: false
+
+print(greater(XI, X)) // Expected: true
+print(greater(X, X)) // Expected: false
+
+print(greaterEqual(X, X)) // Expected: true
+print(greaterEqual(I, X)) // Expected: false
+print(greaterEqual(XI, X)) // Expected: true
+
+print(less(I, X)) // Expected: true
+print(less(X, X)) // Expected: false
+
+print(lessEqual(X, X)) // Expected: true
+print(lessEqual(I, X)) // Expected: true
+print(lessEqual(X, I)) // Expected: false
+
+printNumber(NULLA) // Expected: 0
+printNumber(XI) // Expected: 11

@@ -1,0 +1,20 @@
+set(myMap, map(a, X, b, XX))
+myMap((k, v) => print(join(k, space(), v)))
+
+// Expected: a X
+// Expected: b XX
+
+printNumber(myMap(a)) // Expected: 10
+myMap(a, XI)
+printNumber(myMap(a)) // Expected: 11
+
+printNumber(length(myMap)) // Expected: 2
+printNumber(myMap(b)) // Expected: 20
+remove(myMap, b)
+printNumber(length(myMap)) // Expected: 1
+
+printNumber(myMap(a)) // Expected: 11
+
+myMap(c, III)
+printNumber(length(myMap)) // Expected: 2
+print(myMap(c)) // Expected: III

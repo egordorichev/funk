@@ -1,0 +1,13 @@
+// Simple comment
+
+/*
+ Multiline comment
+ */
+
+print(join(a, space(), b)) // Expected: a b
+print(join(X, separator(), b)) // Expected: X/b
+
+print(substring(hello, I, II)) // Expected: el
+print(substring(hello, NULLA)) // Expected: h
+print(char(XXXVII)) // Expected: %
+print(length(egor)) // Expected: IV

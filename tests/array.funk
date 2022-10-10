@@ -1,0 +1,23 @@
+set(myArray, array(I, X, XX))
+myArray(printNumber)
+
+// Expected: 1
+// Expected: 10
+// Expected: 20
+
+printNumber(myArray(II)) // Expected: 20
+myArray(II, XI)
+printNumber(myArray(II)) // Expected: 11
+
+printNumber(length(myArray)) // Expected: 3
+printNumber(myArray(NULLA)) // Expected: 1
+remove(myArray, NULLA)
+printNumber(length(myArray)) // Expected: 2
+
+printNumber(myArray(NULLA)) // Expected: 10
+
+push(myArray, III)
+printNumber(length(myArray)) // Expected: 3
+print(myArray(II)) // Expected: III
+
+print(join(array(a, b))) // Expected: ab

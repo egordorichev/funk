@@ -1,0 +1,9 @@
+set(variable(n), NULLA)
+
+while(() => less(get(variable(n)), X), {
+	set(variable(n), add(get(variable(n)), I))
+	})
+
+printNumber(get(variable(n))) // Expected: 10
+
+while(false, () => print(false))

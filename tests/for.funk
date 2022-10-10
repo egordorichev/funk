@@ -1,0 +1,33 @@
+for(test, (char) => {
+	print(char)
+})
+
+// Expected: t
+// Expected: e
+// Expected: s
+// Expected: t
+
+for(I, III, (num) => {
+	print(num)
+})
+
+// Expected: I
+// Expected: II
+
+for(III, I, (num) => {
+	print(num)
+})
+
+// Expected: III
+// Expected: II
+
+set(myArray, array(a, b))
+for(myArray, print)
+
+// Expected: a
+// Expected: b
+
+set(myMap, map(d, c))
+for(myMap, (k, v) => print(join(k, space(), v)))
+
+// Expected: d c

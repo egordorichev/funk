@@ -242,10 +242,6 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_remove) {
 	return NULL;
 }
 
-FUNK_NATIVE_FUNCTION_DEFINITION(nulla) {
-	FUNK_RETURN_STRING("NULLA");
-}
-
 FUNK_NATIVE_FUNCTION_DEFINITION(variable) {
 	FUNK_ENSURE_ARG_COUNT(1);
 
@@ -409,7 +405,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(_for) {
 	bool increment = from < funk_to_number(vm, to);
 
 	for (double i = funk_to_number(vm, args[0]);
-			increment == (i < funk_to_number(vm, to));
+			increment ? (i < funk_to_number(vm, to)) : (i > funk_to_number(vm, to));
 			i += (increment ? 1 : -1)) {
 
 		FunkFunction* indexFunction = funk_number_to_string(vm, i);
@@ -690,12 +686,13 @@ FUNK_NATIVE_FUNCTION_DEFINITION(collectGarbage) {
 }
 
 void funk_open_std(FunkVm* vm) {
+	funk_set_global(vm, "NULLA", (FunkFunction *) funk_create_empty_function(vm, "NULLA"));
+
 	FUNK_DEFINE_FUNCTION("array", array);
 	FUNK_DEFINE_FUNCTION("map", map);
 	FUNK_DEFINE_FUNCTION("push", push);
 	FUNK_DEFINE_FUNCTION("remove", _remove);
 
-	FUNK_DEFINE_FUNCTION("NULLA", nulla);
 	FUNK_DEFINE_FUNCTION("variable", variable);
 
 	FUNK_DEFINE_FUNCTION("print", print);

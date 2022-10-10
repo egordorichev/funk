@@ -1,0 +1,13 @@
+function test() {}
+
+print(X) // Expected: X
+printNumber(X) // Expected: 10
+
+set(myFile, file(join(tests, separator(), io, dot(), funk)))
+print(readLine(myFile)) // Expected: function test() {}
+// Expected:
+// ^ that one is for \n, akward, i know
+close(myFile)
+
+print(require(tests.module)) // Expected: XI
+print(a()) // Expected: I

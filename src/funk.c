@@ -359,7 +359,7 @@ static void write_uint16_t(FunkCompiler* compiler, uint16_t byte) {
 }
 
 static void compile_expression(FunkCompiler* compiler);
-static void compile_declaration(FunkCompiler* compiler);
+static void compile_declaration(FunkCompiler* compiler, bool topLevel);
 
 static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, bool lambda) {
 	FunkBasicFunction* oldFunction = compiler->function;
@@ -403,7 +403,7 @@ static FunkFunction* compile_function(FunkCompiler* compiler, FunkString* name, 
 		consume_token(compiler, FUNK_TOKEN_LEFT_BRACE, "Expected '{' after function arguments");
 
 		while (!match_token(compiler, FUNK_TOKEN_RIGHT_BRACE)) {
-			compile_declaration(compiler);
+			compile_declaration(compiler, false);
 		}
 
 		write_uint8_t(compiler, FUNK_INSTRUCTION_PUSH_NULL);
@@ -464,7 +464,7 @@ static void compile_expression(FunkCompiler* compiler) {
 	}
 }
 
-static void compile_declaration(FunkCompiler* compiler) {
+static void compile_declaration(FunkCompiler* compiler, bool topLevel) {
 	if (match_token(compiler, FUNK_TOKEN_FUNCTION)) {
 		consume_token(compiler, FUNK_TOKEN_NAME, "Expected function name");
 
@@ -473,7 +473,7 @@ static void compile_declaration(FunkCompiler* compiler) {
 
 		FunkFunction* newFunction = compile_function(compiler, name, false);
 
-		write_uint8_t(compiler, FUNK_INSTRUCTION_DEFINE);
+		write_uint8_t(compiler, topLevel ? FUNK_INSTRUCTION_DEFINE_GLOBAL : FUNK_INSTRUCTION_DEFINE);
 		write_uint16_t(compiler, funk_add_constant(vm, compiler->function, newFunction));
 
 		return;
@@ -503,7 +503,7 @@ FunkFunction* funk_compile_string(sFunkVm* vm, const char* name, const char* str
 	advance_token(&compiler);
 
 	while (compiler.current.type != FUNK_TOKEN_EOF) {
-		compile_declaration(&compiler);
+		compile_declaration(&compiler, true);
 	}
 
 	write_uint8_t(&compiler, FUNK_INSTRUCTION_RETURN);
@@ -649,6 +649,7 @@ bool funk_table_delete(FunkTable* table, FunkString* key) {
 	entry->key = NULL;
 	entry->value = NULL;
 
+	table->count--;
 	return true;
 }
 
@@ -876,6 +877,17 @@ FunkFunction* funk_run_function(FunkVm* vm, FunkFunction* function, uint8_t argC
 			case FUNK_INSTRUCTION_DEFINE: {
 				FunkBasicFunction* basicFunction = (FunkBasicFunction*) READ_CONSTANT();
 				funk_table_set(vm, &callFrame.variables, basicFunction->parent.name, (FunkObject*) basicFunction);
+
+				#ifdef FUNK_TRACE_STACK
+					printf(" %s", funk_to_string((FunkFunction*) basicFunction));
+				#endif
+
+				break;
+			}
+
+			case FUNK_INSTRUCTION_DEFINE_GLOBAL: {
+				FunkBasicFunction* basicFunction = (FunkBasicFunction*) READ_CONSTANT();
+				funk_table_set(vm, &vm->globals, basicFunction->parent.name, (FunkObject*) basicFunction);
 
 				#ifdef FUNK_TRACE_STACK
 					printf(" %s", funk_to_string((FunkFunction*) basicFunction));
