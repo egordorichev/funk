@@ -9,3 +9,6 @@ add_executable(funk_cli src/main.c)
 
 target_link_libraries(funk_cli funk m)
 set_target_properties(funk_cli PROPERTIES OUTPUT_NAME funk)
+
+set_target_properties(funk_cli PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+set_target_properties(funk_cli PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
