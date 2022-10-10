@@ -102,7 +102,7 @@ FUNK_NATIVE_FUNCTION_DEFINITION(push) {
 		size_t totalSize = sizeof(FunkFunction*) * newSize;
 		FunkFunction** newData = (FunkFunction**) vm->allocFn(totalSize);
 
-		memcpy((void*) newData, (void*) data->data, sizeof(FunkFunction) * data->allocated);
+		memcpy((void*) newData, (void*) data->data, sizeof(FunkFunction*) * data->allocated);
 		vm->freeFn((void*) data->data);
 
 		data->data = newData;
@@ -113,6 +113,18 @@ FUNK_NATIVE_FUNCTION_DEFINITION(push) {
 	data->length = newLength;
 
 	return NULL;
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(pop) {
+	FUNK_ENSURE_MIN_ARG_COUNT(1);
+	FunkArrayData* data = extract_array_data(vm, args[0]);
+
+	if (data->length == 0) {
+		return NULL;
+	}
+
+	data->length--;
+	return data->data[data->length];
 }
 
 typedef struct FunkMapData {
@@ -275,6 +287,14 @@ FUNK_NATIVE_FUNCTION_DEFINITION(printNumber) {
 	return NULL;
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(printChar) {
+	for (uint8_t i = 0; i < argCount; i++) {
+		printf("%c", (char) funk_to_number(vm, args[i]));
+	}
+
+	return NULL;
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(_clock) {
 	clock_t time = clock();
 	double inSeconds = (double) time / (double) CLOCKS_PER_SEC;
@@ -321,6 +341,11 @@ FUNK_NATIVE_FUNCTION_DEFINITION(notEqual) {
 	}
 
 	FUNK_RETURN_BOOL(args[0]->name != args[1]->name);
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(notNull) {
+	FUNK_ENSURE_ARG_COUNT(1);
+	FUNK_RETURN_BOOL(args[0] != NULL);
 }
 
 FUNK_NATIVE_FUNCTION_DEFINITION(not) {
@@ -547,6 +572,16 @@ FUNK_NATIVE_FUNCTION_DEFINITION(lessEqual) {
 	FUNK_RETURN_BOOL(funk_to_number(vm, args[0]) <= funk_to_number(vm, args[1]));
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(and) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_is_true(vm, args[0]) && funk_is_true(vm, args[1]));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(or) {
+	FUNK_ENSURE_MIN_ARG_COUNT(2);
+	FUNK_RETURN_BOOL(funk_is_true(vm, args[0]) || funk_is_true(vm, args[1]));
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(require) {
 	FUNK_ENSURE_ARG_COUNT(1);
 	FunkString* path = args[0]->name;
@@ -686,17 +721,19 @@ FUNK_NATIVE_FUNCTION_DEFINITION(collectGarbage) {
 }
 
 void funk_open_std(FunkVm* vm) {
-	funk_set_global(vm, "NULLA", (FunkFunction *) funk_create_empty_function(vm, "NULLA"));
+	funk_set_global(vm, "NULLA", (FunkFunction *) funk_create_empty_function(vm, ""));
 
 	FUNK_DEFINE_FUNCTION("array", array);
 	FUNK_DEFINE_FUNCTION("map", map);
 	FUNK_DEFINE_FUNCTION("push", push);
+	FUNK_DEFINE_FUNCTION("pop", pop);
 	FUNK_DEFINE_FUNCTION("remove", _remove);
 
 	FUNK_DEFINE_FUNCTION("variable", variable);
 
 	FUNK_DEFINE_FUNCTION("print", print);
 	FUNK_DEFINE_FUNCTION("printNumber", printNumber);
+	FUNK_DEFINE_FUNCTION("printChar", printChar);
 	FUNK_DEFINE_FUNCTION("clock", _clock);
 	FUNK_DEFINE_FUNCTION("readLine", readLine);
 
@@ -704,6 +741,7 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("get", get);
 	FUNK_DEFINE_FUNCTION("equal", equal);
 	FUNK_DEFINE_FUNCTION("notEqual", notEqual);
+	FUNK_DEFINE_FUNCTION("notNull", notNull);
 	FUNK_DEFINE_FUNCTION("not", not);
 
 	FUNK_DEFINE_FUNCTION("if", _if);
@@ -726,6 +764,9 @@ void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("greaterEqual", greaterEqual);
 	FUNK_DEFINE_FUNCTION("less", less);
 	FUNK_DEFINE_FUNCTION("lessEqual", lessEqual);
+
+	FUNK_DEFINE_FUNCTION("and", and);
+	FUNK_DEFINE_FUNCTION("or", or);
 
 	FUNK_DEFINE_FUNCTION("require", require);
 

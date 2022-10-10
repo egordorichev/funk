@@ -2,15 +2,6 @@
 
 A language with the only data type being a function!
 
-### Todo before release
-
-* docs
-* check all todos
-
-### Demos
-
-* BF compiler
-
 ### Possible future improvements
 
 * Try/catch

@@ -328,7 +328,7 @@ static void consume_token(FunkCompiler* compiler, FunkTokenType type, const char
 		return advance_token(compiler);
 	}
 
-	funk_error(compiler->vm, "%s, got %.*s", message, compiler->current.length, compiler->current.start);
+	funk_error(compiler->vm, "%s, got %.*s on line %i", message, compiler->current.length, compiler->current.start, compiler->current.line);
 }
 
 static bool match_token(FunkCompiler* compiler, FunkTokenType type) {
