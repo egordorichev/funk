@@ -197,6 +197,8 @@ static FunkObject* allocate_object(FunkVm* vm, size_t size) {
 	FunkObject* object = (FunkObject*) vm->allocFn(size);
 
 	object->next = vm->objects;
+	object->marked = false;
+
 	vm->objects = object;
 
 	return object;
@@ -1262,4 +1264,100 @@ FunkFunction* funk_number_to_string(FunkVm* vm, double number) {
 
 	buffer[length] = '\0';
 	return (FunkFunction*) funk_create_empty_function(vm, buffer);
+}
+
+static void mark(FunkObject* object) {
+	if (object == NULL || object->marked) {
+		return;
+	}
+
+	object->marked = true;
+
+	switch (object->type) {
+		case FUNK_OBJECT_BASIC_FUNCTION: {
+			FunkBasicFunction* function = (FunkBasicFunction*) object;
+			mark((FunkObject *) function->parent.name);
+
+			for (uint16_t i = 0; i < function->constantsLength; i++) {
+				mark((FunkObject *) function->constants[i]);
+			}
+
+			for (uint16_t i = 0; i < function->argumentCount; i++) {
+				mark((FunkObject *) function->argumentNames[i]);
+			}
+
+			break;
+		}
+
+		case FUNK_OBJECT_NATIVE_FUNCTION: {
+			FunkNativeFunction* function = (FunkNativeFunction*) object;
+			mark((FunkObject *) function->parent.name);
+
+			break;
+		}
+
+		case FUNK_OBJECT_STRING: {
+			break;
+		}
+
+		default: UNREACHABLE;
+	}
+}
+
+static void mark_table(FunkTable* table) {
+	for (int i = 0; i <= table->capacity; i++) {
+		FunkTableEntry* entry = &table->entries[i];
+
+		if (entry->key != NULL) {
+			mark((FunkObject *) entry->key);
+			mark(entry->value);
+		}
+	}
+}
+
+static void mark_roots(FunkVm* vm) {
+	mark_table(&vm->globals);
+	mark_table(&vm->modules);
+	mark_table(&vm->strings);
+
+	FunkCallFrame* frame = vm->callFrame;
+
+	while (frame != NULL) {
+		mark_table(&frame->variables);
+		mark((FunkObject *) frame->function);
+
+		frame = frame->previous;
+	}
+
+	for (FunkFunction** object = vm->stack; object < vm->stackTop; object++) {
+		mark((FunkObject *) *object);
+	}
+}
+
+static void sweep(FunkVm* vm) {
+	FunkObject* previous = NULL;
+	FunkObject* object = vm->objects;
+
+	while (object != NULL) {
+		if (object->marked) {
+			previous = object;
+			object = object->next;
+		} else {
+			FunkObject *unreached = object;
+			object = object->next;
+
+			if (previous != NULL) {
+				previous->next = object;
+			} else {
+				vm->objects = object;
+			}
+
+			funk_free_object(vm, unreached);
+		}
+	}
+}
+
+void funk_collect_garbage(FunkVm* vm) {
+	mark_roots(vm);
+	sweep(vm);
 }

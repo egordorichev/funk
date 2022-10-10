@@ -1,3 +1,4 @@
 set(myFile, file(join(demos, separator(), fib, dot(), funk)))
 print(myFile())
+collectGarbage()
 close(myFile)

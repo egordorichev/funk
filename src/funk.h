@@ -54,6 +54,8 @@ typedef enum {
 typedef struct FunkObject {
 	FunkObjectType type;
 	struct FunkObject* next;
+
+	bool marked;
 } FunkObject;
 
 void funk_free_object(sFunkVm* vm, FunkObject* object);
@@ -230,5 +232,7 @@ bool funk_function_has_code(FunkFunction* function);
 bool funk_is_true(FunkVm* vm, FunkFunction* function);
 double funk_to_number(FunkVm* vm, FunkFunction* function);
 FunkFunction* funk_number_to_string(FunkVm* vm, double value);
+
+void funk_collect_garbage(FunkVm* vm);
 
 #endif

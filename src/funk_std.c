@@ -684,6 +684,11 @@ FUNK_NATIVE_FUNCTION_DEFINITION(readLine) {
 	return (FunkFunction *) funk_create_basic_function(vm, string);
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(collectGarbage) {
+	funk_collect_garbage(vm);
+	return NULL;
+}
+
 void funk_open_std(FunkVm* vm) {
 	FUNK_DEFINE_FUNCTION("array", array);
 	FUNK_DEFINE_FUNCTION("map", map);
@@ -729,4 +734,6 @@ void funk_open_std(FunkVm* vm) {
 
 	FUNK_DEFINE_FUNCTION("file", file);
 	FUNK_DEFINE_FUNCTION("close", close);
+
+	FUNK_DEFINE_FUNCTION("collectGarbage", collectGarbage);
 }
