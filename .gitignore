@@ -4,3 +4,6 @@ Makefile
 dist*
 CMakeFiles*
 CMakeCache*
+cmake_install.cmake
+install_manifest.txt
+libfunk.*

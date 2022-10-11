@@ -582,6 +582,16 @@ FUNK_NATIVE_FUNCTION_DEFINITION(or) {
 	FUNK_RETURN_BOOL(funk_is_true(vm, args[0]) || funk_is_true(vm, args[1]));
 }
 
+FUNK_NATIVE_FUNCTION_DEFINITION(_cos) {
+	FUNK_ENSURE_MIN_ARG_COUNT(1);
+	FUNK_RETURN_NUMBER(cos(funk_to_number(vm, args[0])));
+}
+
+FUNK_NATIVE_FUNCTION_DEFINITION(_sin) {
+	FUNK_ENSURE_MIN_ARG_COUNT(1);
+	FUNK_RETURN_NUMBER(sin(funk_to_number(vm, args[0])));
+}
+
 FUNK_NATIVE_FUNCTION_DEFINITION(require) {
 	FUNK_ENSURE_ARG_COUNT(1);
 	FunkString* path = args[0]->name;
@@ -767,6 +777,8 @@ void funk_open_std(FunkVm* vm) {
 
 	FUNK_DEFINE_FUNCTION("and", and);
 	FUNK_DEFINE_FUNCTION("or", or);
+	FUNK_DEFINE_FUNCTION("cos", _cos);
+	FUNK_DEFINE_FUNCTION("sin", _sin);
 
 	FUNK_DEFINE_FUNCTION("require", require);
 

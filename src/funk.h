@@ -215,8 +215,6 @@ FunkFunction* funk_run_file(FunkVm* vm, const char* file);
 #define FUNK_RETURN_STRING(string) return (FunkFunction *) funk_create_basic_function(vm, funk_create_string(vm, (string), strlen(string)))
 #define FUNK_RETURN_NUMBER(number) return funk_number_to_string(vm, (number))
 #define FUNK_RETURN_BOOL(value) FUNK_RETURN_STRING((value) ? "true" : "false")
-#define FUNK_RETURN_TRUE() FUNK_RETURN_BOOL(true)
-#define FUNK_RETURN_FALSE() FUNK_RETURN_BOOL(false)
 #define FUNK_ENSURE_ARG_COUNT(count) if (argCount != (count)) { funk_error(vm, "Expected %i of arguments", (count)); return NULL; }
 #define FUNK_ENSURE_MIN_ARG_COUNT(count) if (argCount < (count)) { funk_error(vm, "Expected at least %i arguments", (count)); return NULL; }
 

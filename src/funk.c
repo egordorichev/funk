@@ -474,7 +474,7 @@ static void compile_declaration(FunkCompiler* compiler, bool topLevel) {
 		FunkFunction* newFunction = compile_function(compiler, name, false);
 
 		write_uint8_t(compiler, topLevel ? FUNK_INSTRUCTION_DEFINE_GLOBAL : FUNK_INSTRUCTION_DEFINE);
-		write_uint16_t(compiler, funk_add_constant(vm, compiler->function, newFunction));
+		write_uint16_t(compiler, funk_add_constant(vm, compiler->function, (FunkObject *) newFunction));
 
 		return;
 	}
