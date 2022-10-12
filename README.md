@@ -123,7 +123,8 @@ and a cleanup function, for freeing the data.
 
 ### Control flow
 
-Funk is turing complete. It has if-statements, while & for loops.
+Funk is turing complete. It has if-statements, while & for loops. **The only value, that is evaluated
+as true, is a function with the name "true".**
 Ifs take a condition function, an if branch and an optional else branch:
 
 ```js
@@ -173,6 +174,14 @@ all replace the operators, you would expect to see in any normal language.
 Just for the sake of example, `greaterEqual(X, I)` in funk is the same as `10 >= 1` in JS.
 
 #### Control flow operations
+
+`if(condition, then, [else])` is equal to `if (condition()) { then() } else if (else != null) { else() }`
+
+`while(condition, do)` is equal to `while (condition()) { do() }`
+
+`for(from, to, callback)` calls the callback with the value starting at `from` and going to `to` (non-inclusive)
+
+`for(iteratable, callback)` calls the callback with all the values of the iteratable ("string", "array" or "map") 
 
 #### Math operations
 
