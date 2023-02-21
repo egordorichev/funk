@@ -93,18 +93,18 @@ function someFunction(callback) {
 }
 
 function a(arg0, arg1) {
-	return arg0 + arg1
+	return add(arg0, arg1)
 }
 
 someFunction(a)
 
 someFunction((arg0, arg1) => {
-	return arg0 * arg1
+	return multiply(arg0, arg1)
 })
 
 // As in most languages, if your anonymous function body is a single expression,
 // you can remove the {}
-someFunction((arg0, arg1) => arg0 * arg1)
+someFunction((arg0, arg1) => multiply(arg0, arg1))
 
 // But going futher than that, if you don't take any arguments, the function
 // can be just a block of code:
